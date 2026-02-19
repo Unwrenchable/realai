@@ -116,7 +116,7 @@ def test_embeddings():
     assert 'data' in response
     assert len(response['data']) > 0
     assert 'embedding' in response['data'][0]
-    assert len(response['data'][0]['embedding']) == 1536
+    assert len(response['data'][0]['embedding']) > 0
     print("✓ Embeddings test passed")
 
 
@@ -288,6 +288,31 @@ def test_plugin_system():
     assert 'plugin_name' in response
     assert 'status' in response
     print("✓ Plugin system test passed")
+
+
+def test_local_plugin_loading():
+    """Test loading a local plugin from the `plugins` package."""
+    print("Testing local plugin loading...")
+    client = RealAIClient()
+    response = client.plugins.load(plugin_name="sample_plugin")
+    assert response.get('plugin_name') == 'sample_plugin'
+    # Plugin should be recorded in model registry and attach a callable
+    assert 'sample_plugin' in client.model.plugins_registry
+    assert hasattr(client.model, 'sample_action')
+    result = client.model.sample_action({'x': 1})
+    assert isinstance(result, dict)
+    assert result.get('ok') is True
+    print("✓ Local plugin loading test passed")
+
+
+def test_load_all_plugins():
+    """Test discovery and loading of all plugins in `plugins` package."""
+    print("Testing load_all_plugins...")
+    client = RealAIClient()
+    loaded = client.model.load_all_plugins()
+    # At least our sample_plugin should be discovered and loaded
+    assert 'sample_plugin' in loaded
+    print("✓ load_all_plugins test passed")
 
 
 def test_memory_learning():

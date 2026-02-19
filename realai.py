@@ -776,9 +776,9 @@ class RealAIClient:
         
         def conversation(self, message: str, **kwargs) -> Dict[str, Any]:
             """Have a natural conversation."""
+            kwargs.setdefault('response_format', 'both')
             return self.model.voice_interaction(
                 text_input=message,
-                response_format="both",
                 **kwargs
             )
     
@@ -793,9 +793,9 @@ class RealAIClient:
         
         def build(self, business_type: str, **kwargs) -> Dict[str, Any]:
             """Build a business from the ground up."""
+            kwargs.setdefault('stage', 'planning')
             return self.model.business_planning(
                 business_type=business_type,
-                stage="planning",
                 **kwargs
             )
     

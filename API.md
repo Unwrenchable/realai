@@ -381,6 +381,21 @@ client = RealAIClient(api_key="...")
 
 The API structure and method calls remain the same!
 
+## Plugin System (API)
+
+Local plugins can be added by placing modules in the `plugins/` package. A plugin module should expose a callable `register(model, config: dict) -> dict` which attaches methods or state to the provided `RealAI` model instance and returns metadata. Example:
+
+```python
+def register(model, config: dict) -> dict:
+  def sample_action(data=None):
+    return {"ok": True, "received": data}
+
+  setattr(model, "sample_action", sample_action)
+  return {"name": "sample_plugin", "version": "0.1", "capabilities": ["sample_action"], "methods": ["sample_action"]}
+```
+
+Load plugins via `client.plugins.load(plugin_name="sample_plugin")` or discover and load all local plugins with `client.model.load_all_plugins()`.
+
 ## Examples
 
 See [examples.py](examples.py) for comprehensive usage examples.

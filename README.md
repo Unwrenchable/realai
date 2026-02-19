@@ -459,6 +459,17 @@ RealAI is designed with the following principles:
 7. **Self-Contained** - No heavy dependencies required
 8. **Learns & Adapts** - Gets better with every interaction
 
+## Implemented Features (status)
+
+The repository includes working implementations (or safe, local integrations) for several features mentioned above. Current status:
+
+- ✅ `web_research`: performs lightweight web fetching + HTML parsing using `requests` + `beautifulsoup4` when available; falls back to a canned response on error.
+- ✅ `execute_code`: runs Python code in a temporary file with a timeout and optional resource limits via `resource` (OS-dependent). Intended for development/trusted usage.
+- ✅ `embeddings`: uses `sentence-transformers` (if installed) to produce real embeddings; otherwise falls back to stub 1536-d zero vectors.
+- ✅ `plugin system`: load local plugins from the `plugins/` package. Plugins expose `register(model, config)` and may attach methods to the `RealAI` model. Use `client.plugins.load(...)` or `client.model.load_all_plugins()` to discover local plugins.
+
+Note: Some capabilities in the README (real-world payments, ordering groceries, production-grade Web3 interactions, hosted ASR/TTS pipelines) are simulated and require implementing external integrations to perform real effects. I can implement those integrations incrementally — tell me which to prioritize next.
+
 ## Capabilities
 
 RealAI supports **17 comprehensive capabilities** out of the box:

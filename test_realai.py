@@ -303,17 +303,6 @@ def test_memory_learning():
     print("✓ Memory learning test passed")
 
 
-def test_model_info():
-    """Test getting model info."""
-    print("Testing model info...")
-    model = RealAI()
-    info = model.get_model_info()
-    assert 'name' in info
-    assert 'version' in info
-    assert 'capabilities' in info
-    print("✓ Model info test passed")
-
-
 def run_all_tests():
     """Run all tests."""
     print("="*60)

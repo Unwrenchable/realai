@@ -1,0 +1,3 @@
+# RealAI Requirements
+# No external dependencies required for basic functionality
+# The model is self-contained and ready to use

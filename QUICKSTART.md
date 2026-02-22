@@ -43,7 +43,24 @@ response = client.chat.create(
 print(response['choices'][0]['message']['content'])
 ```
 
-## Step 4: Start API Server (Optional)
+## Step 4: Launch the GUI (Optional)
+
+Run the graphical launcher to configure API keys and start the server:
+
+```bash
+python realai_gui.py
+```
+
+To build a standalone Windows `.exe` (run these commands from inside the
+repository directory — e.g. `cd realai` — not from your home folder):
+
+```bash
+pip install pyinstaller
+pyinstaller realai_launcher.spec
+# Output: dist\RealAI.exe
+```
+
+## Step 5: Start API Server (Optional)
 
 For REST API access:
 
@@ -61,7 +78,7 @@ curl -X POST http://localhost:8000/v1/chat/completions \
   }'
 ```
 
-## Step 5: Run Tests
+## Step 6: Run Tests
 
 Verify everything works:
 

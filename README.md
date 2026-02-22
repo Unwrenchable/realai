@@ -465,6 +465,9 @@ python realai_gui.py
 # Install build tool (one-time)
 pip install pyinstaller
 
+# Navigate to the repository root (if you are not already there)
+cd realai
+
 # Build the executable
 pyinstaller realai_launcher.spec
 

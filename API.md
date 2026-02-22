@@ -23,7 +23,7 @@ RealAI provides a comprehensive, OpenAI-compatible API for various AI capabiliti
 ## Installation
 
 ```bash
-pip install -e git+https://github.com/Unwrenchable/realai.git#egg=realai
+pip install git+https://github.com/Unwrenchable/realai.git
 ```
 
 Or from source:
@@ -31,7 +31,7 @@ Or from source:
 ```bash
 git clone https://github.com/Unwrenchable/realai.git
 cd realai
-pip install -e .
+pip install -e .   # -e = editable/development mode; the dot (.) means "install from the current directory"
 ```
 
 ## Basic Usage

@@ -57,13 +57,13 @@ RealAI provides **17 comprehensive capabilities** in a single, unified model:
 ```bash
 git clone https://github.com/Unwrenchable/realai.git
 cd realai
-pip install -e .
+pip install -e .   # -e = editable/development mode; the dot (.) means "install from the current directory"
 ```
 
 ### Quick Install
 
 ```bash
-pip install -e git+https://github.com/Unwrenchable/realai.git#egg=realai
+pip install git+https://github.com/Unwrenchable/realai.git
 ```
 
 ## Quick Start

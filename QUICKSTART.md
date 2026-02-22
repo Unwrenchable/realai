@@ -9,7 +9,7 @@ Clone and install:
 ```bash
 git clone https://github.com/Unwrenchable/realai.git
 cd realai
-pip install -e .
+pip install -e .   # -e = editable/development mode; the dot (.) means "install from the current directory"
 ```
 
 ## Step 2: Run Examples

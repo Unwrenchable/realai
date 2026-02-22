@@ -1169,7 +1169,7 @@ class RealAI:
         response = {
             "plugin_name": plugin_name,
             "status": "loaded",
-            "version": "1.0.0",
+            "version": "2.0.0",
             "capabilities": ["Plugin capabilities available"],
             "config": plugin_config or {},
             "methods": ["method1", "method2", "method3"]

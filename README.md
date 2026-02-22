@@ -423,7 +423,7 @@ Direct access to the underlying model:
 ```python
 from realai import RealAI
 
-model = RealAI(model_name="realai-1.0")
+model = RealAI(model_name="realai-2.0")
 
 # Get model information
 info = model.get_model_info()

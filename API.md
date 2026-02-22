@@ -80,7 +80,7 @@ response = client.chat.create(
   "id": "chatcmpl-1234567890",
   "object": "chat.completion",
   "created": 1234567890,
-  "model": "realai-1.0",
+  "model": "realai-2.0",
   "choices": [{
     "index": 0,
     "message": {
@@ -271,7 +271,7 @@ Health check endpoint.
 ```json
 {
   "status": "healthy",
-  "model": "realai-1.0"
+  "model": "realai-2.0"
 }
 ```
 
@@ -284,7 +284,7 @@ List available models.
   "object": "list",
   "data": [
     {
-      "id": "realai-1.0",
+      "id": "realai-2.0",
       "object": "model",
       "created": 1708308000,
       "owned_by": "realai"

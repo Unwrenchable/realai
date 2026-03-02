@@ -223,7 +223,7 @@ def run_server(host: str = "0.0.0.0", port: int = 8000):
     print("  POST /v1/audio/transcriptions")
     print("  POST /v1/audio/speech")
     print("\nPass your API key via:  Authorization: Bearer <key>")
-    print("Override provider via:  X-Provider: openai|anthropic|grok|gemini")
+    print("Override provider via:  X-Provider: openai|anthropic|grok|gemini|openrouter|mistral|together|deepseek|perplexity")
     print("Override base URL via:  X-Base-URL: https://...")
     print("\nPress Ctrl+C to stop the server")
     print("="*60)

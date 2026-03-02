@@ -508,10 +508,15 @@ Python `openai` library, Postman, Open WebUI, …) can point at it instead of
 
 ```bash
 # Set at least one provider API key
-export REALAI_OPENAI_API_KEY=sk-...        # OpenAI
-# export REALAI_ANTHROPIC_API_KEY=sk-ant-... # Anthropic
-# export REALAI_GROK_API_KEY=xai-...        # xAI / Grok
-# export REALAI_GEMINI_API_KEY=AIza...      # Google Gemini
+export REALAI_OPENAI_API_KEY=sk-...            # OpenAI
+# export REALAI_ANTHROPIC_API_KEY=sk-ant-...   # Anthropic
+# export REALAI_GROK_API_KEY=xai-...           # xAI / Grok
+# export REALAI_GEMINI_API_KEY=AIza...         # Google Gemini
+# export REALAI_OPENROUTER_API_KEY=sk-or-v1-...# OpenRouter (access 200+ models)
+# export REALAI_MISTRAL_API_KEY=...            # Mistral AI
+# export REALAI_TOGETHER_API_KEY=...           # Together AI
+# export REALAI_DEEPSEEK_API_KEY=...           # DeepSeek
+# export REALAI_PERPLEXITY_API_KEY=pplx-...   # Perplexity AI
 
 # Start the server (default: port 8000, all interfaces)
 python api_server.py
@@ -547,6 +552,24 @@ Any OpenAI-compatible front-end (e.g. [Open WebUI](https://github.com/open-webui
 - **API base URL**: `http://localhost:8000/v1`
 - **API key**: your provider key (or any string if running in placeholder mode)
 - **Model**: `realai-2.0`
+
+### Supported AI Providers
+
+RealAI routes your requests to the world's leading AI services. Configure any of the providers below to get started:
+
+| Provider | Env Variable | Key Prefix | Get Your Key |
+|----------|-------------|------------|--------------|
+| **OpenAI** | `REALAI_OPENAI_API_KEY` | `sk-...` | https://platform.openai.com/api-keys |
+| **Anthropic (Claude)** | `REALAI_ANTHROPIC_API_KEY` | `sk-ant-...` | https://console.anthropic.com/ |
+| **xAI / Grok** | `REALAI_GROK_API_KEY` | `xai-...` | https://console.x.ai/ |
+| **Google Gemini** | `REALAI_GEMINI_API_KEY` | `AIza...` | https://aistudio.google.com/app/apikey |
+| **OpenRouter** | `REALAI_OPENROUTER_API_KEY` | `sk-or-v1-...` | https://openrouter.ai/keys |
+| **Mistral AI** | `REALAI_MISTRAL_API_KEY` | — | https://console.mistral.ai/api-keys |
+| **Together AI** | `REALAI_TOGETHER_API_KEY` | — | https://api.together.xyz/settings/api-keys |
+| **DeepSeek** | `REALAI_DEEPSEEK_API_KEY` | — | https://platform.deepseek.com/api_keys |
+| **Perplexity AI** | `REALAI_PERPLEXITY_API_KEY` | `pplx-...` | https://www.perplexity.ai/settings/api |
+
+> **Tip — OpenRouter for maximum model choice:** OpenRouter gives you access to 200+ models (GPT-4o, Claude 3.5, Llama 3, Mistral, Gemini, and more) through a single API key and the same OpenAI-compatible interface.  Set `REALAI_OPENROUTER_API_KEY` and use `X-Provider: openrouter` (or let RealAI auto-detect the `sk-or-v1-` prefix) to route through OpenRouter.
 
 ## Architecture
 

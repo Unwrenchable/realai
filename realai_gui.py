@@ -66,6 +66,36 @@ PROVIDERS = {
         "help": "Get your key at https://aistudio.google.com/app/apikey",
         "env_var": PROVIDER_ENV_VARS["gemini"],
     },
+    "openrouter": {
+        "label": "OpenRouter",
+        "placeholder": "sk-or-v1-...",
+        "help": "Get your key at https://openrouter.ai/keys",
+        "env_var": PROVIDER_ENV_VARS["openrouter"],
+    },
+    "mistral": {
+        "label": "Mistral AI",
+        "placeholder": "...",
+        "help": "Get your key at https://console.mistral.ai/api-keys",
+        "env_var": PROVIDER_ENV_VARS["mistral"],
+    },
+    "together": {
+        "label": "Together AI",
+        "placeholder": "...",
+        "help": "Get your key at https://api.together.xyz/settings/api-keys",
+        "env_var": PROVIDER_ENV_VARS["together"],
+    },
+    "deepseek": {
+        "label": "DeepSeek",
+        "placeholder": "...",
+        "help": "Get your key at https://platform.deepseek.com/api_keys",
+        "env_var": PROVIDER_ENV_VARS["deepseek"],
+    },
+    "perplexity": {
+        "label": "Perplexity AI",
+        "placeholder": "pplx-...",
+        "help": "Get your key at https://www.perplexity.ai/settings/api",
+        "env_var": PROVIDER_ENV_VARS["perplexity"],
+    },
 }
 
 

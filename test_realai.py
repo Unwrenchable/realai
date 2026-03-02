@@ -338,6 +338,8 @@ def test_provider_detection():
     assert _detect_provider("sk-ant-abc123", None) == "anthropic"
     assert _detect_provider("xai-abc123", None) == "grok"
     assert _detect_provider("AIzaXYZ", None) == "gemini"
+    assert _detect_provider("sk-or-v1-abc123", None) == "openrouter"
+    assert _detect_provider("pplx-abc123", None) == "perplexity"
     assert _detect_provider(None, None) is None
     assert _detect_provider(None, "openai") == "openai"
     assert _detect_provider("sk-abc123", "anthropic") == "anthropic"  # explicit wins
@@ -347,7 +349,8 @@ def test_provider_detection():
 def test_provider_configs():
     """Test that PROVIDER_CONFIGS contains all expected providers."""
     print("Testing provider configs...")
-    for name in ("openai", "anthropic", "grok", "gemini"):
+    for name in ("openai", "anthropic", "grok", "gemini",
+                 "openrouter", "mistral", "together", "deepseek", "perplexity"):
         assert name in PROVIDER_CONFIGS, f"Missing provider: {name}"
         cfg = PROVIDER_CONFIGS[name]
         assert "base_url" in cfg
@@ -359,7 +362,8 @@ def test_provider_configs():
 def test_provider_env_vars():
     """Test that PROVIDER_ENV_VARS covers all providers in PROVIDER_CONFIGS."""
     print("Testing provider env vars...")
-    for name in ("openai", "anthropic", "grok", "gemini"):
+    for name in ("openai", "anthropic", "grok", "gemini",
+                 "openrouter", "mistral", "together", "deepseek", "perplexity"):
         assert name in PROVIDER_ENV_VARS, f"Missing env var entry for: {name}"
         env_var = PROVIDER_ENV_VARS[name]
         assert env_var.startswith("REALAI_"), f"Unexpected env var name: {env_var}"
@@ -391,10 +395,35 @@ def test_realai_provider_init():
     assert m.provider == "anthropic"
     assert m._api_format == "anthropic"
 
+    # OpenRouter key auto-detection
+    m = RealAI(api_key="sk-or-v1-testkey123")
+    assert m.provider == "openrouter"
+    assert m.base_url == PROVIDER_CONFIGS["openrouter"]["base_url"]
+
+    # Perplexity key auto-detection
+    m = RealAI(api_key="pplx-testkey123")
+    assert m.provider == "perplexity"
+    assert m.base_url == PROVIDER_CONFIGS["perplexity"]["base_url"]
+
     # Explicit provider override
     m = RealAI(api_key="sk-testkey123", provider="grok")
     assert m.provider == "grok"
     assert m.base_url == PROVIDER_CONFIGS["grok"]["base_url"]
+
+    # Mistral via explicit provider (no unique key prefix)
+    m = RealAI(api_key="somekey", provider="mistral")
+    assert m.provider == "mistral"
+    assert m.base_url == PROVIDER_CONFIGS["mistral"]["base_url"]
+
+    # Together AI via explicit provider
+    m = RealAI(api_key="somekey", provider="together")
+    assert m.provider == "together"
+    assert m.base_url == PROVIDER_CONFIGS["together"]["base_url"]
+
+    # DeepSeek via explicit provider
+    m = RealAI(api_key="somekey", provider="deepseek")
+    assert m.provider == "deepseek"
+    assert m.base_url == PROVIDER_CONFIGS["deepseek"]["base_url"]
 
     # Custom base_url override
     m = RealAI(api_key="sk-testkey123", base_url="http://localhost:11434/v1")

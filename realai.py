@@ -62,15 +62,43 @@ PROVIDER_CONFIGS: Dict[str, Dict[str, str]] = {
         "default_model": "gemini-1.5-flash",
         "api_format": "openai",
     },
+    "openrouter": {
+        # OpenRouter aggregates hundreds of models via a single OpenAI-compatible API.
+        "base_url": "https://openrouter.ai/api/v1",
+        "default_model": "openai/gpt-4o-mini",
+        "api_format": "openai",
+    },
+    "mistral": {
+        "base_url": "https://api.mistral.ai/v1",
+        "default_model": "mistral-small-latest",
+        "api_format": "openai",
+    },
+    "together": {
+        "base_url": "https://api.together.xyz/v1",
+        "default_model": "meta-llama/Llama-3-8b-chat-hf",
+        "api_format": "openai",
+    },
+    "deepseek": {
+        "base_url": "https://api.deepseek.com/v1",
+        "default_model": "deepseek-chat",
+        "api_format": "openai",
+    },
+    "perplexity": {
+        "base_url": "https://api.perplexity.ai",
+        "default_model": "llama-3.1-sonar-small-128k-online",
+        "api_format": "openai",
+    },
 }
 
 #: Maps API key prefixes to provider names for auto-detection.
 _KEY_PREFIX_TO_PROVIDER: Dict[str, str] = {
     "sk-ant-": "anthropic",
+    "sk-or-v1-": "openrouter",
     "sk-proj-": "openai",
     "sk-": "openai",
     "xai-": "grok",
     "AIza": "gemini",
+    "pplx-": "perplexity",
 }
 
 #: Maps provider names to the environment variable used to pass their API key
@@ -81,6 +109,11 @@ PROVIDER_ENV_VARS: Dict[str, str] = {
     "anthropic": "REALAI_ANTHROPIC_API_KEY",
     "grok": "REALAI_GROK_API_KEY",
     "gemini": "REALAI_GEMINI_API_KEY",
+    "openrouter": "REALAI_OPENROUTER_API_KEY",
+    "mistral": "REALAI_MISTRAL_API_KEY",
+    "together": "REALAI_TOGETHER_API_KEY",
+    "deepseek": "REALAI_DEEPSEEK_API_KEY",
+    "perplexity": "REALAI_PERPLEXITY_API_KEY",
 }
 
 

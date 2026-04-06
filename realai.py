@@ -1038,7 +1038,8 @@ class RealAI:
                 # Strip markdown code fences if present
                 cleaned = ai_content
                 if "```" in cleaned:
-                    m = re.search(r"```(?:json)?\s*([\s\S]*?)```", cleaned)
+                    # Match code fences with any optional language tag (e.g. ```json, ```JSON)
+                    m = re.search(r"```(?:[a-zA-Z]*)?\s*([\s\S]*?)```", cleaned)
                     if m:
                         cleaned = m.group(1).strip()
                 parsed = json.loads(cleaned)
@@ -1143,7 +1144,9 @@ class RealAI:
                     main_text = ai_content
 
                 ai_response_text = main_text
-                # Use first sentence of response as insight
+                # Use first sentence of response as insight.
+                # A trailing space is appended so the \s alternative matches
+                # strings that end immediately after the punctuation mark.
                 first_sentence_match = re.search(
                     r"^(.+?[.!?])(?:\s|$)", main_text + " "
                 )

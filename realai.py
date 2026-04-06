@@ -21,6 +21,7 @@ The sky is the limit - RealAI has no limits and can truly do anything!
 """
 
 import json
+import re
 import time
 import subprocess
 import tempfile
@@ -1034,15 +1035,13 @@ class RealAI:
             )
             if ai_content:
                 # Try to parse a JSON block from the response
-                import json as _json
                 # Strip markdown code fences if present
                 cleaned = ai_content
                 if "```" in cleaned:
-                    import re as _re
-                    m = _re.search(r"```(?:json)?\s*([\s\S]*?)```", cleaned)
+                    m = re.search(r"```(?:json)?\s*([\s\S]*?)```", cleaned)
                     if m:
                         cleaned = m.group(1).strip()
-                parsed = _json.loads(cleaned)
+                parsed = json.loads(cleaned)
                 # Extract action_items list
                 if isinstance(parsed.get("action_items"), list):
                     action_items = [str(x) for x in parsed.pop("action_items")]
@@ -1134,9 +1133,8 @@ class RealAI:
                     main_text = parts[0].strip()
                     rec_text = parts[1].strip()
                     # Parse bullet points (lines starting with - or • or *)
-                    import re as _re
-                    rec_lines = _re.findall(
-                        r"^[\-\*•]\s*(.+)$", rec_text, _re.MULTILINE
+                    rec_lines = re.findall(
+                        r"^[\-\*•]\s*(.+)$", rec_text, re.MULTILINE
                     )
                     if rec_lines:
                         recommendations = [r.strip() for r in rec_lines[:5]]
@@ -1145,9 +1143,13 @@ class RealAI:
 
                 ai_response_text = main_text
                 # Use first sentence of response as insight
-                first_sentence = main_text.split(".")[0].strip() + "."
-                if len(first_sentence) > 10:
-                    ai_insights = first_sentence
+                first_sentence_match = re.search(
+                    r"^(.+?[.!?])\s", main_text + " "
+                )
+                if first_sentence_match:
+                    candidate = first_sentence_match.group(1).strip()
+                    if len(candidate) > 10:
+                        ai_insights = candidate
 
         except Exception:
             pass  # fall back to static values

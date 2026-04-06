@@ -854,11 +854,42 @@ class RealAI:
         Returns:
             Dict[str, Any]: Task execution status and details
         """
+        plan_text = f"RealAI has {'executed' if execute else 'planned'} your {task_type} task."
+        try:
+            ai_result = self.chat_completion([
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a task automation assistant. "
+                        "Break the task into concrete, executable steps. "
+                        "Be concise and practical."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Task type: {task_type}\n"
+                        f"Task details: {task_details}\n"
+                        f"Mode: {'execute' if execute else 'plan only'}"
+                    )
+                }
+            ])
+            ai_content = (
+                ai_result.get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+                .strip()
+            )
+            if ai_content:
+                plan_text = ai_content
+        except Exception:
+            pass  # fall back to static plan_text
+
         response = {
             "task_type": task_type,
             "status": "executed" if execute else "planned",
             "details": task_details,
-            "plan": f"RealAI has {'executed' if execute else 'planned'} your {task_type} task.",
+            "plan": plan_text,
             "estimated_completion": "5-10 minutes",
             "confirmations": [],
             "success": True
@@ -884,12 +915,57 @@ class RealAI:
         Returns:
             Dict[str, Any]: Response with audio and/or text
         """
-        input_text = text_input or "Transcribed speech from audio"
+        input_text = text_input or ""
+        conv_id = conversation_id or f"conv-{int(time.time())}"
+        response_text = "RealAI is ready to have a natural conversation with you through voice."
+        audio_url = (
+            "https://realai.example.com/voice-response.mp3"
+            if response_format in ["audio", "both"] else None
+        )
+        input_transcription = None
+
+        try:
+            # Step 1: transcribe audio file if provided
+            if audio_input and os.path.isfile(str(audio_input)):
+                transcription = self.transcribe_audio(audio_input)
+                input_transcription = transcription.get("text", input_text)
+                if input_transcription:
+                    input_text = input_transcription
+
+            # Step 2: get AI response
+            if input_text:
+                ai_result = self.chat_completion([
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a helpful voice assistant. "
+                            "Keep responses concise for spoken delivery."
+                        )
+                    },
+                    {"role": "user", "content": input_text}
+                ])
+                ai_content = (
+                    ai_result.get("choices", [{}])[0]
+                    .get("message", {})
+                    .get("content", "")
+                    .strip()
+                )
+                if ai_content:
+                    response_text = ai_content
+
+            # Step 3: generate audio for the response
+            if response_format in ["audio", "both"]:
+                audio_result = self.generate_audio(response_text)
+                audio_url = audio_result.get("audio_url", audio_url)
+
+        except Exception:
+            pass  # fall back to defaults set above
+
         response = {
-            "conversation_id": conversation_id or f"conv-{int(time.time())}",
-            "input_transcription": input_text if audio_input else None,
-            "response_text": "RealAI is ready to have a natural conversation with you through voice.",
-            "response_audio_url": "https://realai.example.com/voice-response.mp3" if response_format in ["audio", "both"] else None,
+            "conversation_id": conv_id,
+            "input_transcription": input_transcription if audio_input else None,
+            "response_text": response_text,
+            "response_audio_url": audio_url,
             "emotion_detected": "neutral",
             "intent": "conversational",
             "format": response_format
@@ -913,24 +989,79 @@ class RealAI:
         Returns:
             Dict[str, Any]: Business plan and recommendations
         """
+        # Static fallback plan
+        business_plan = {
+            "executive_summary": "Comprehensive business plan created by RealAI",
+            "market_analysis": "Detailed market research and competitive analysis",
+            "financial_projections": "5-year financial projections and funding requirements",
+            "marketing_strategy": "Multi-channel marketing and growth strategy",
+            "operations_plan": "Operational structure and processes",
+            "risk_analysis": "Risk assessment and mitigation strategies"
+        }
+        action_items = [
+            "Define unique value proposition",
+            "Conduct market research",
+            "Create MVP or prototype",
+            "Develop go-to-market strategy",
+            "Secure initial funding"
+        ]
+
+        try:
+            system_prompt = (
+                f"You are an expert business consultant. Create a comprehensive business plan "
+                f"for a {business_type} at {stage} stage.\n"
+                "Respond with a JSON object containing these exact keys: "
+                "executive_summary, market_analysis, financial_projections, "
+                "marketing_strategy, operations_plan, risk_analysis, "
+                "action_items (as a JSON array of strings)."
+            )
+            ai_result = self.chat_completion([
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": (
+                        f"Business type: {business_type}\n"
+                        f"Stage: {stage}\n"
+                        f"Additional details: {details or 'None provided'}"
+                    )
+                }
+            ])
+            ai_content = (
+                ai_result.get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+                .strip()
+            )
+            if ai_content:
+                # Try to parse a JSON block from the response
+                import json as _json
+                # Strip markdown code fences if present
+                cleaned = ai_content
+                if "```" in cleaned:
+                    import re as _re
+                    m = _re.search(r"```(?:json)?\s*([\s\S]*?)```", cleaned)
+                    if m:
+                        cleaned = m.group(1).strip()
+                parsed = _json.loads(cleaned)
+                # Extract action_items list
+                if isinstance(parsed.get("action_items"), list):
+                    action_items = [str(x) for x in parsed.pop("action_items")]
+                # Remaining keys populate the business_plan dict
+                for key in [
+                    "executive_summary", "market_analysis",
+                    "financial_projections", "marketing_strategy",
+                    "operations_plan", "risk_analysis"
+                ]:
+                    if key in parsed and isinstance(parsed[key], str):
+                        business_plan[key] = parsed[key]
+        except Exception:
+            pass  # fall back to static values
+
         response = {
             "business_type": business_type,
             "stage": stage,
-            "business_plan": {
-                "executive_summary": "Comprehensive business plan created by RealAI",
-                "market_analysis": "Detailed market research and competitive analysis",
-                "financial_projections": "5-year financial projections and funding requirements",
-                "marketing_strategy": "Multi-channel marketing and growth strategy",
-                "operations_plan": "Operational structure and processes",
-                "risk_analysis": "Risk assessment and mitigation strategies"
-            },
-            "action_items": [
-                "Define unique value proposition",
-                "Conduct market research",
-                "Create MVP or prototype",
-                "Develop go-to-market strategy",
-                "Secure initial funding"
-            ],
+            "business_plan": business_plan,
+            "action_items": action_items,
             "estimated_timeline": "6-12 months to launch",
             "success_probability": 0.75
         }
@@ -955,18 +1086,80 @@ class RealAI:
         Returns:
             Dict[str, Any]: Therapeutic response and recommendations
         """
+        _THERAPY_DISCLAIMER = (
+            "\n\n⚠️ IMPORTANT: This AI provides general wellbeing support only. "
+            "It is not a substitute for professional mental health care. "
+            "If you are in crisis, please contact a mental health professional "
+            "or a crisis helpline immediately."
+        )
+        _THERAPY_SYSTEM_PROMPT = (
+            "You are a compassionate AI wellbeing support assistant trained in "
+            "evidence-based techniques including Cognitive Behavioural Therapy (CBT) "
+            "and motivational interviewing.\n\n"
+            "Your role is to:\n"
+            "- Listen empathetically and validate feelings\n"
+            "- Help users identify and reframe negative thought patterns\n"
+            "- Suggest practical coping strategies\n"
+            "- Encourage professional help when appropriate\n"
+            "- Never diagnose or prescribe\n\n"
+            "Always respond warmly, without judgment, and in plain language.\n\n"
+            "After your response, on a new line add: RECOMMENDATIONS: followed by "
+            "3 bullet points of specific coping strategies."
+        )
+
+        # Static fallbacks
+        ai_response_text = "RealAI provides empathetic, supportive, and professional therapeutic guidance."
+        ai_insights = "I hear what you're sharing and I'm here to support you through this."
+        recommendations = [
+            "Practice self-compassion",
+            "Consider journaling your thoughts",
+            "Establish a regular routine"
+        ]
+
+        try:
+            ai_result = self.chat_completion([
+                {"role": "system", "content": _THERAPY_SYSTEM_PROMPT},
+                {"role": "user", "content": message}
+            ])
+            ai_content = (
+                ai_result.get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+                .strip()
+            )
+            if ai_content:
+                # Split off the RECOMMENDATIONS section if present
+                if "RECOMMENDATIONS:" in ai_content:
+                    parts = ai_content.split("RECOMMENDATIONS:", 1)
+                    main_text = parts[0].strip()
+                    rec_text = parts[1].strip()
+                    # Parse bullet points (lines starting with - or • or *)
+                    import re as _re
+                    rec_lines = _re.findall(
+                        r"^[\-\*•]\s*(.+)$", rec_text, _re.MULTILINE
+                    )
+                    if rec_lines:
+                        recommendations = [r.strip() for r in rec_lines[:5]]
+                else:
+                    main_text = ai_content
+
+                ai_response_text = main_text
+                # Use first sentence of response as insight
+                first_sentence = main_text.split(".")[0].strip() + "."
+                if len(first_sentence) > 10:
+                    ai_insights = first_sentence
+
+        except Exception:
+            pass  # fall back to static values
+
         response = {
             "session_id": session_id or f"session-{int(time.time())}",
             "session_type": session_type,
             "approach": approach,
-            "response": "RealAI provides empathetic, supportive, and professional therapeutic guidance.",
-            "insights": "I hear what you're sharing and I'm here to support you through this.",
+            "response": ai_response_text + _THERAPY_DISCLAIMER,
+            "insights": ai_insights,
             "techniques": ["Active listening", "Cognitive reframing", "Mindfulness"],
-            "recommendations": [
-                "Practice self-compassion",
-                "Consider journaling your thoughts",
-                "Establish a regular routine"
-            ],
+            "recommendations": recommendations,
             "resources": ["Mental health hotlines", "Professional referrals available"],
             "disclaimer": "This is AI-assisted support. For serious concerns, please consult a licensed professional."
         }

@@ -1,10 +1,9 @@
-# FizzSwap — Local Bootstrap Guide
+# RealAI — Local Bootstrap Guide
 
-Follow the steps for whichever sub-project you want to run. Unless noted
-otherwise, all commands are run from the repo root.
+Follow the steps below to get RealAI running locally for development.
 
-> **No secrets in this file.** Copy `.env.example` files to `.env` and fill in
-> your own values locally. Never commit `.env` files.
+> **No secrets in this file.** Set API keys via environment variables or
+> through the GUI (`~/.realai/config.json`). Never commit real keys.
 
 ---
 
@@ -12,174 +11,179 @@ otherwise, all commands are run from the repo root.
 
 | Tool | Minimum version | Install hint |
 |------|----------------|--------------|
-| Node.js | 18 LTS | https://nodejs.org or `nvm install 18` |
-| npm | 9+ | Bundled with Node 18 |
+| Python | 3.7 | https://python.org (3.11 or 3.12 recommended) |
+| pip | 21+ | Bundled with Python |
 | Git | any recent | https://git-scm.com |
-| Rust + Cargo | stable | https://rustup.rs (Solana build only) |
-| Solana BPF toolchain | 1.18+ | `solana-install init` (Solana build only) |
+| tkinter | stdlib | Included in official Python installer |
 
 ---
 
-## 1 — Root (Hardhat / TypeScript)
-
-This covers EVM contract compilation, testing, linting, and TypeScript builds.
+## 1 — Clone and install
 
 ```bash
-# 1. Install dependencies
-npm install
+git clone https://github.com/Unwrenchable/realai.git
+cd realai
 
-# 2. Compile Solidity contracts
-npm run compile-contracts
-# Output: artifacts/ and typechain-types/
+# Install all runtime dependencies
+pip install -r requirements.txt
 
-# 3. Run EVM tests
-npm run test
-# Uses: Hardhat + Mocha + Chai
-
-# 4. Compile TypeScript utilities (src/)
-npm run build
-# Output: dist/
-
-# 5. Lint TypeScript and JavaScript files
-npm run lint
-
-# 6. (Optional) Deploy to a local Hardhat network
-#    Start Hardhat node in another terminal:
-npx hardhat node
-#    Then deploy:
-npm run deploy-evm
-```
-
-### Environment variables (root)
-
-Copy `.env.example` to `.env` and fill in the required values:
-
-```bash
-cp .env.example .env
-# Edit .env — never commit this file
-```
-
-Typical variables (see `.env.example` for the full list):
-
-- `PRIVATE_KEY` — deployer wallet private key (local dev only)
-- `RPC_URL` — EVM RPC endpoint
-
----
-
-## 2 — Relayer (`relayer/`)
-
-The relayer is a standalone Express service that bridges EVM ↔ Solana swap events.
-
-```bash
-# 1. Enter the relayer directory
-cd relayer
-
-# 2. Install dependencies
-npm install
-
-# 3. Set up environment
-cp .env.example .env 2>/dev/null || echo "Create relayer/.env manually"
-# Edit relayer/.env — never commit this file
-
-# 4. Generate the initial chain mappings (required on first run)
-#    Run from the repo root:
-cd ..
-npm run relayer:init-mappings
-cd relayer
-
-# 5. Run in development mode (ts-node)
-npm run start
-
-# 6. Build for production
-npm run build
-# Output: relayer/dist/
-
-# 7. Run the compiled output
-npm run start:prod
-```
-
-The relayer listens on the port defined in `relayer/.env` (default: `4001`).
-
----
-
-## 3 — Web frontend (`web/`)
-
-The UI is a Vite + React 18 single-page app.
-
-```bash
-# 1. Enter the web directory
-cd web
-
-# 2. Install dependencies
-npm install
-
-# 3. Set up environment
-cp .env.example .env
-# Edit web/.env — never commit this file
-```
-
-Required Vite env vars (declared in `web/src/vite-env.d.ts`):
-
-```
-VITE_SOLANA_RPC=        # e.g. https://api.devnet.solana.com
-VITE_SOLANA_PROGRAM_ID= # deployed Solana program public key
-VITE_RELAYER_URL=       # e.g. http://localhost:3001
-```
-
-```bash
-# 4. Start the dev server (hot-module replacement)
-npm run dev
-# Opens at http://localhost:5173 by default
-
-# 5. Production build
-npm run build
-# Output: web/dist/
-
-# 6. Preview the production build locally
-npm run preview
-```
-
-> **Note:** The build will emit a large-chunk warning (>500 KB) from
-> `ethers` + `@solana/web3.js`. This is expected and does not affect
-> functionality.
-
----
-
-## 4 — Solana program (optional)
-
-The Solana program source lives under `programs/fizzdex-solana/`. Building it requires
-Rust and the Solana BPF toolchain.
-
-```bash
-# Install Rust (if not already installed)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source "$HOME/.cargo/env"
-
-# Install the Solana CLI and BPF toolchain
-sh -c "$(curl -sSfL https://release.solana.com/stable/install)"
-# Ensure `solana` is on your PATH, then:
-solana-install init
-
-# Build the program (from repo root)
-npm run build-solana
-# Equivalent: cargo build-bpf --manifest-path=programs/fizzdex-solana/Cargo.toml
-# Output: target/deploy/*.so
+# Or install in editable mode for development (enables `python -m realai`)
+pip install -e .
 ```
 
 ---
 
-## Quick-reference cheat sheet
+## 2 — Configure at least one AI provider
 
-```
-npm run compile-contracts   # Solidity → artifacts/
-npm run build               # TypeScript (root) → dist/
-npm run test                # Hardhat tests
-npm run lint                # ESLint
-npm run deploy-evm          # Deploy EVM contracts (needs .env)
-npm run build-solana        # Rust BPF build (needs toolchain)
-npm run relayer:init-mappings
+RealAI falls back to placeholder responses when no API key is configured.
+To get real AI responses, export at least one provider key:
 
-cd relayer && npm start     # Relayer dev server
-cd web && npm run dev       # Frontend dev server (port 5173)
-cd web && npm run build     # Frontend production build
+```bash
+# Choose any one (or more) of these:
+export REALAI_OPENAI_API_KEY="sk-proj-..."
+export REALAI_ANTHROPIC_API_KEY="sk-ant-..."
+export REALAI_GEMINI_API_KEY="AIza..."
+export REALAI_GROK_API_KEY="xai-..."
+export REALAI_OPENROUTER_API_KEY="sk-or-..."
+export REALAI_MISTRAL_API_KEY="mis-..."
+export REALAI_TOGETHER_API_KEY="tog-..."
+export REALAI_DEEPSEEK_API_KEY="dsk-..."
+export REALAI_PERPLEXITY_API_KEY="pplx-..."
 ```
+
+On Windows use `set` instead of `export`.  
+Alternatively, enter keys in the GUI and click **Save Keys**.
+
+---
+
+## 3 — Run the test suite
+
+```bash
+python test_realai.py
+```
+
+All 30 tests should pass. Tests run without any API keys (they exercise the
+fallback/stub paths).
+
+---
+
+## 4 — Choose an interface
+
+### A. Python library
+
+```python
+from realai import RealAIClient
+
+client = RealAIClient(api_key="sk-proj-...")
+response = client.chat.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+print(response["choices"][0]["message"]["content"])
+```
+
+### B. Command-line demo
+
+```bash
+python -m realai
+```
+
+### C. REST API server (OpenAI-compatible)
+
+```bash
+python api_server.py
+# Server starts on http://localhost:8000
+
+# Test with curl:
+curl http://localhost:8000/health
+curl http://localhost:8000/v1/models
+curl -X POST http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer sk-proj-..." \
+  -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"Hi"}]}'
+```
+
+### D. Graphical user interface
+
+```bash
+python realai_gui.py
+```
+
+Enter your API keys, click **Save Keys**, then click **Start Server** to start
+the REST API in the background. Use the built-in chat panel to test.
+
+---
+
+## 5 — Optional: enable audio capabilities
+
+### Text-to-speech (pyttsx3)
+
+Already installed via `requirements.txt`. Test with:
+
+```python
+from realai import RealAIClient
+client = RealAIClient()
+result = client.audio.generate(input="Hello world", voice="default")
+```
+
+### Speech-to-text (Vosk)
+
+1. Download a Vosk model from https://alphacephei.com/vosk/models  
+   (e.g. `vosk-model-small-en-us-0.15` for lightweight English ASR)
+2. Extract the archive: `unzip vosk-model-small-en-us-0.15.zip`
+3. Set the environment variable:
+
+```bash
+export VOSK_MODEL_PATH="/path/to/vosk-model-small-en-us-0.15"
+```
+
+---
+
+## 6 — Optional: enable Web3 capabilities
+
+Set an Ethereum-compatible RPC endpoint:
+
+```bash
+export WEB3_PROVIDER_URL="https://mainnet.infura.io/v3/YOUR_PROJECT_ID"
+```
+
+Web3 operations are **read-only by default** (balances, contract queries).
+Transaction signing requires additional implementation.
+
+---
+
+## 7 — Optional: build a standalone Windows executable
+
+Requires Windows + PyInstaller:
+
+```bash
+pip install pyinstaller
+pyinstaller realai_launcher.spec
+# Output: dist/RealAI.exe
+```
+
+---
+
+## 8 — Writing and running examples
+
+```bash
+python examples.py            # Core capability examples
+python examples_limitless.py  # Extended capability examples
+```
+
+---
+
+## 9 — Writing a plugin
+
+See `plugins/sample_plugin.py` for the plugin registration pattern:
+
+```python
+# plugins/my_plugin.py
+def register(model):
+    def my_feature(input_text, **kwargs):
+        return {"result": f"Processed: {input_text}"}
+    model.my_feature = my_feature
+    return {"name": "my_plugin", "version": "1.0.0"}
+```
+
+Plugins are auto-discovered by `client.plugins.load_all_plugins()`.

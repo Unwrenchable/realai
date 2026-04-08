@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RealAI - The Limitless AI That Can Do Anything</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 50px;
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .tagline {
+            font-size: 1.2em;
+            color: #666;
+            margin-bottom: 30px;
+            font-style: italic;
+        }
+
+        .status {
+            background: #10b981;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            display: inline-block;
+            margin-bottom: 30px;
+            font-weight: 600;
+        }
+
+        .section {
+            margin-bottom: 30px;
+        }
+
+        h2 {
+            font-size: 1.8em;
+            margin-bottom: 15px;
+            color: #667eea;
+        }
+
+        .endpoints {
+            background: #f9fafb;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 15px;
+        }
+
+        .endpoint {
+            display: flex;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .endpoint:last-child {
+            border-bottom: none;
+        }
+
+        .method {
+            font-weight: 700;
+            padding: 5px 10px;
+            border-radius: 5px;
+            margin-right: 15px;
+            font-size: 0.85em;
+            min-width: 50px;
+            text-align: center;
+        }
+
+        .method.get {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .method.post {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .path {
+            font-family: 'Courier New', monospace;
+            color: #374151;
+            flex: 1;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .feature {
+            background: #f9fafb;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .feature-title {
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #667eea;
+        }
+
+        .feature-desc {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .code-block {
+            background: #1f2937;
+            color: #10b981;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 15px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #e5e7eb;
+            text-align: center;
+            color: #666;
+        }
+
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 RealAI</h1>
+        <p class="tagline">The Limitless AI That Can Do Anything</p>
+
+        <div class="status">
+            ✓ Deployment is Live
+        </div>
+
+        <div class="section">
+            <h2>Welcome to RealAI</h2>
+            <p>RealAI is a limitless AI model providing 22+ comprehensive capabilities through an OpenAI-compatible API. The sky is the limit!</p>
+        </div>
+
+        <div class="section">
+            <h2>Key Features</h2>
+            <div class="features">
+                <div class="feature">
+                    <div class="feature-title">💬 Chat & Text</div>
+                    <div class="feature-desc">Conversational AI and text generation</div>
+                </div>
+                <div class="feature">
+                    <div class="feature-title">🎨 Images & Video</div>
+                    <div class="feature-desc">Generate and analyze visual content</div>
+                </div>
+                <div class="feature">
+                    <div class="feature-title">🧠 Advanced AI</div>
+                    <div class="feature-desc">Chain-of-thought reasoning & multi-agent orchestration</div>
+                </div>
+                <div class="feature">
+                    <div class="feature-title">🔊 Audio</div>
+                    <div class="feature-desc">Speech-to-text and text-to-speech</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>API Endpoints</h2>
+            <div class="endpoints">
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="path">/health</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="path">/v1/models</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="path">/v1/capabilities</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <span class="path">/v1/chat/completions</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <span class="path">/v1/completions</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <span class="path">/v1/images/generations</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <span class="path">/v1/videos/generations</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <span class="path">/v1/embeddings</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <span class="path">/v1/audio/transcriptions</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <span class="path">/v1/audio/speech</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <span class="path">/v1/reasoning/chain</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <span class="path">/v1/synthesis/knowledge</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <span class="path">/v1/reflection/analyze</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <span class="path">/v1/agents/orchestrate</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Quick Start Example</h2>
+            <div class="code-block">curl -X POST https://[YOUR-API-URL]/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{
+    "model": "realai-2.0",
+    "messages": [
+      {"role": "user", "content": "What can you do?"}
+    ]
+  }'</div>
+        </div>
+
+        <div class="footer">
+            <p>Learn more at <a href="https://github.com/Unwrenchable/realai" target="_blank">github.com/Unwrenchable/realai</a></p>
+            <p>Check API status: <a href="/health">/health</a></p>
+        </div>
+    </div>
+</body>
+</html>

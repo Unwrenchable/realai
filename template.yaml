@@ -47,6 +47,12 @@ Resources:
       Layers:
         - !Ref SharedDependenciesLayer
       Events:
+        RootEndpoint:
+          Type: Api
+          Properties:
+            RestApiId: !Ref RealAIApi
+            Path: /
+            Method: GET
         HealthEndpoint:
           Type: Api
           Properties:

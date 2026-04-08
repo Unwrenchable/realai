@@ -10,6 +10,12 @@ def app(environ, start_response):
     path = environ.get("PATH_INFO", "/")
     method = environ.get("REQUEST_METHOD", "GET")
 
+    if method != "GET":
+        body = b'{"error":"Method not allowed"}'
+        headers = [("Content-Type", "application/json"), ("Content-Length", str(len(body)))]
+        start_response("405 Method Not Allowed", headers)
+        return [body]
+
     if method == "GET" and path == "/health":
         body = b'{"status":"healthy","model":"realai-2.0"}'
         headers = [("Content-Type", "application/json"), ("Content-Length", str(len(body)))]

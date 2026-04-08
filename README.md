@@ -678,46 +678,44 @@ RealAI supports **17 comprehensive capabilities** out of the box:
 
 ## Deployment
 
-### AWS Lambda Deployment
+RealAI can be deployed in multiple ways to fit your needs:
 
-RealAI includes a **split Lambda architecture** optimized for serverless deployment. This architecture breaks the monolithic API into 6 lightweight Lambda functions, each under 50 MB, solving the AWS Lambda size limit issue.
+### 📋 **[Complete Deployment Guide](DEPLOYMENT.md)**
 
-**Features:**
-- ✅ Each Lambda function < 50 MB (well under AWS limits)
-- ✅ Optimized for fast cold starts
-- ✅ Cost-effective (pay only for what you use)
-- ✅ Maintains the same API interface
-- ✅ Easy deployment with AWS SAM
+See **[DEPLOYMENT.md](DEPLOYMENT.md)** for comprehensive deployment instructions covering:
+- 🏠 **Local Development** - Quick setup for development and testing
+- 💻 **Desktop Application** - Windows .exe with GUI and built-in server
+- 🌐 **API Server** - Deploy on any server (VPS, cloud, on-premises)
+- ☁️ **AWS Lambda** - Serverless deployment with split architecture
+- 🔧 **Configuration** - Environment variables and provider setup
+- ✅ **Testing** - Verify your deployment
+- 🛠️ **Troubleshooting** - Common issues and solutions
 
-**Quick Deploy:**
+### Quick Start Options
 
+**Local Development:**
 ```bash
-# Install AWS SAM CLI
-pip install aws-sam-cli
+git clone https://github.com/Unwrenchable/realai.git
+cd realai
+pip install -e .
+export REALAI_OPENAI_API_KEY=sk-...
+python api_server.py
+```
 
-# Configure AWS credentials
-aws configure
-
-# Deploy to AWS
+**AWS Lambda (Serverless):**
+```bash
 sam build
 sam deploy --guided
 ```
 
-**See [LAMBDA_DEPLOYMENT.md](LAMBDA_DEPLOYMENT.md) for detailed deployment instructions.**
-
-### Traditional Server Deployment
-
-Run the API server locally or on any server:
-
+**Desktop App (Windows):**
 ```bash
-# Install with full dependencies (for local development)
-pip install -r requirements-full.txt
-
-# Run the API server
-python api_server.py
+python realai_gui.py
+# Or build standalone .exe:
+pyinstaller realai_launcher.spec
 ```
 
-The server will start on `http://0.0.0.0:8000` with OpenAI-compatible endpoints.
+For detailed instructions, see **[DEPLOYMENT.md](DEPLOYMENT.md)**.
 
 ## Contributing
 

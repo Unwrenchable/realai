@@ -676,6 +676,49 @@ RealAI supports **17 comprehensive capabilities** out of the box:
 - ✅ **Lightweight**: Minimal dependencies
 - ✅ **Learns & Adapts**: Gets smarter with every interaction
 
+## Deployment
+
+### AWS Lambda Deployment
+
+RealAI includes a **split Lambda architecture** optimized for serverless deployment. This architecture breaks the monolithic API into 6 lightweight Lambda functions, each under 50 MB, solving the AWS Lambda size limit issue.
+
+**Features:**
+- ✅ Each Lambda function < 50 MB (well under AWS limits)
+- ✅ Optimized for fast cold starts
+- ✅ Cost-effective (pay only for what you use)
+- ✅ Maintains the same API interface
+- ✅ Easy deployment with AWS SAM
+
+**Quick Deploy:**
+
+```bash
+# Install AWS SAM CLI
+pip install aws-sam-cli
+
+# Configure AWS credentials
+aws configure
+
+# Deploy to AWS
+sam build
+sam deploy --guided
+```
+
+**See [LAMBDA_DEPLOYMENT.md](LAMBDA_DEPLOYMENT.md) for detailed deployment instructions.**
+
+### Traditional Server Deployment
+
+Run the API server locally or on any server:
+
+```bash
+# Install with full dependencies (for local development)
+pip install -r requirements-full.txt
+
+# Run the API server
+python api_server.py
+```
+
+The server will start on `http://0.0.0.0:8000` with OpenAI-compatible endpoints.
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.

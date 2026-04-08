@@ -141,6 +141,7 @@ class ModelCapability(Enum):
     """Supported capabilities of the RealAI model."""
     TEXT_GENERATION = "text_generation"
     IMAGE_GENERATION = "image_generation"
+    VIDEO_GENERATION = "video_generation"
     IMAGE_ANALYSIS = "image_analysis"
     CODE_GENERATION = "code_generation"
     EMBEDDINGS = "embeddings"
@@ -466,6 +467,111 @@ class RealAI:
             ]
         }
         return response
+
+    def generate_video(
+        self,
+        prompt: str,
+        image_url: Optional[str] = None,
+        size: str = "1280x720",
+        duration: int = 5,
+        fps: int = 24,
+        n: int = 1,
+        response_format: str = "url",
+        model: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Generate a video from text or an input image.
+
+        Args:
+            prompt (str): Prompt describing the requested video.
+            image_url (Optional[str]): Optional source image for image-to-video.
+            size (str): Output dimensions (e.g., "1280x720").
+            duration (int): Video duration in seconds.
+            fps (int): Frames per second.
+            n (int): Number of videos to generate.
+            response_format (str): "url" or "b64_json".
+            model (Optional[str]): Optional provider model override.
+
+        Returns:
+            Dict[str, Any]: Video generation response in OpenAI-style data format.
+        """
+        if response_format not in ("url", "b64_json"):
+            response_format = "url"
+
+        safe_n = max(1, int(n))
+        request_model = model or self._provider_model
+
+        # Attempt real provider call when configured and endpoint is available.
+        if self.api_key and self.provider and self._api_format == "openai" and self.base_url:
+            try:
+                import requests as _requests
+
+                payload: Dict[str, Any] = {
+                    "model": request_model,
+                    "prompt": prompt,
+                    "size": size,
+                    "duration": duration,
+                    "fps": fps,
+                    "n": safe_n,
+                    "response_format": response_format,
+                }
+                if image_url:
+                    payload["image"] = image_url
+
+                resp = _requests.post(
+                    f"{self.base_url}/videos/generations",
+                    json=payload,
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {self.api_key}",
+                    },
+                    timeout=120,
+                )
+                resp.raise_for_status()
+                provider_response = resp.json()
+                if isinstance(provider_response, dict) and provider_response.get("data"):
+                    return provider_response
+            except Exception:
+                # Fall back to placeholder response if provider does not support
+                # this endpoint or request execution fails for any reason.
+                pass
+
+        # Graceful local placeholder response.
+        data: List[Dict[str, Any]] = []
+        mode = "image_to_video" if image_url else "text_to_video"
+        for i in range(safe_n):
+            item: Dict[str, Any] = {
+                "revised_prompt": prompt,
+                "mode": mode,
+            }
+            if image_url:
+                item["source_image_url"] = image_url
+            if response_format == "b64_json":
+                try:
+                    import base64 as _base64
+                    placeholder_blob = (
+                        f"RealAI placeholder video payload {i + 1}".encode("utf-8")
+                    )
+                    item["b64_json"] = _base64.b64encode(placeholder_blob).decode("ascii")
+                except Exception:
+                    item["b64_json"] = ""
+            else:
+                item["url"] = f"https://realai.example.com/generated-video-{i}.mp4"
+            data.append(item)
+
+        return {
+            "created": int(time.time()),
+            "data": data,
+            "model": request_model,
+            "duration": duration,
+            "size": size,
+            "fps": fps,
+            "response_format": response_format,
+            "note": (
+                "Placeholder response. Configure a provider endpoint that supports "
+                "video generation for real video outputs."
+            ),
+        }
     
     def analyze_image(self, image_url: str, prompt: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -1933,6 +2039,7 @@ class RealAIClient:
         self.chat = self.ChatCompletions(self.model)
         self.completions = self.Completions(self.model)
         self.images = self.Images(self.model)
+        self.videos = self.Videos(self.model)
         self.embeddings = self.Embeddings(self.model)
         self.audio = self.Audio(self.model)
 
@@ -1982,6 +2089,15 @@ class RealAIClient:
         def analyze(self, **kwargs) -> Dict[str, Any]:
             """Analyze an image."""
             return self.model.analyze_image(**kwargs)
+
+    class Videos:
+        """Video generation interface."""
+        def __init__(self, model: RealAI):
+            self.model = model
+
+        def generate(self, **kwargs) -> Dict[str, Any]:
+            """Generate a video."""
+            return self.model.generate_video(**kwargs)
     
     class Embeddings:
         """Embeddings interface."""

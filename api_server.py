@@ -161,6 +161,19 @@ class RealAIAPIHandler(BaseHTTPRequestHandler):
                 )
                 self._send_response(200, response)
 
+            elif parsed_path.path == '/v1/videos/generations':
+                response = model.generate_video(
+                    prompt=body.get('prompt', ''),
+                    image_url=body.get('image_url'),
+                    size=body.get('size', '1280x720'),
+                    duration=body.get('duration', 5),
+                    fps=body.get('fps', 24),
+                    n=body.get('n', 1),
+                    response_format=body.get('response_format', 'url'),
+                    model=body.get('model')
+                )
+                self._send_response(200, response)
+
             elif parsed_path.path == '/v1/embeddings':
                 response = model.create_embeddings(
                     input_text=body.get('input', ''),

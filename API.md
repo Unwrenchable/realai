@@ -12,6 +12,7 @@ RealAI provides a comprehensive, OpenAI-compatible API for various AI capabiliti
   - [Chat Completions](#chat-completions)
   - [Text Completions](#text-completions)
   - [Image Generation](#image-generation)
+  - [Video Generation](#video-generation)
   - [Image Analysis](#image-analysis)
   - [Code Generation](#code-generation)
   - [Embeddings](#embeddings)
@@ -158,6 +159,31 @@ Analyze and describe images (like GPT-4 Vision).
 response = client.images.analyze(
     image_url="https://example.com/image.jpg",
     prompt="What's in this image?"
+)
+```
+
+### Video Generation
+
+Generate videos from text prompts or from an input image.
+
+**Method:** `client.videos.generate(**kwargs)`
+
+**Parameters:**
+- `prompt` (str, required): Video description
+- `image_url` (str, optional): Source image URL for image-to-video generation
+- `size` (str, optional): Video dimensions, default: `"1280x720"`
+- `duration` (int, optional): Duration in seconds, default: `5`
+- `fps` (int, optional): Frames per second, default: `24`
+- `n` (int, optional): Number of videos to generate, default: `1`
+- `response_format` (str, optional): `"url"` or `"b64_json"`, default: `"url"`
+
+**Example:**
+```python
+response = client.videos.generate(
+    prompt="A cinematic timelapse of a modern city at dusk",
+    duration=5,
+    size="1280x720",
+    n=1
 )
 ```
 
@@ -415,6 +441,22 @@ Generate an image.
   "size": "1024x1024",
   "quality": "hd",
   "n": 1
+}
+```
+
+#### POST /v1/videos/generations
+Generate a video.
+
+**Request Body:**
+```json
+{
+  "prompt": "A cinematic timelapse of a modern city at dusk",
+  "image_url": "https://example.com/source-image.png",
+  "size": "1280x720",
+  "duration": 5,
+  "fps": 24,
+  "n": 1,
+  "response_format": "url"
 }
 ```
 

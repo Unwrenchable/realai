@@ -12,12 +12,13 @@ RealAI is the limitless AI model that can truly do anything. It's designed to be
 
 ## 🌟 Features
 
-RealAI provides **21 comprehensive capabilities** in a single, unified model:
+RealAI provides **22 comprehensive capabilities** in a single, unified model:
 
 ### Core AI Capabilities
 - 💬 **Chat Completion** - Conversational AI like ChatGPT
 - 📝 **Text Generation** - Complete text from prompts like GPT-3
 - 🎨 **Image Generation** - Create images from text like DALL-E
+- 🎬 **Video Generation** - Create videos from text or an image prompt
 - 👁️ **Image Analysis** - Understand and describe images like GPT-4 Vision
 - 💻 **Code Generation & Execution** - Generate, understand, and execute code
 - 🔤 **Embeddings** - Create semantic embeddings for text
@@ -51,6 +52,7 @@ RealAI provides **21 comprehensive capabilities** in a single, unified model:
 - 💚 Provide therapy and emotional support
 - ⛓️ Work with Web3 and blockchain
 - 💻 Code AND execute anything
+- 🎬 Generate videos from text and image prompts
 - 🔌 Be implemented anywhere via plugins
 - 🧠 Learn from every interaction
 - 🔗 Reason step-by-step with full transparency
@@ -187,6 +189,19 @@ analysis = client.images.analyze(
 )
 
 print(analysis['description'])
+```
+
+### Video Generation (text-to-video / image-to-video)
+
+```python
+video_response = client.videos.generate(
+    prompt="A cinematic sunrise over snowy mountains",
+    duration=5,
+    size="1280x720",
+    n=1
+)
+
+print(video_response['data'][0]['url'])
 ```
 
 ### Code Generation (Codex-style)

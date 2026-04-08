@@ -83,7 +83,28 @@ class RealAIAPIHandler(BaseHTTPRequestHandler):
         """Handle GET requests."""
         parsed_path = urlparse(self.path)
 
-        if parsed_path.path == '/v1/models':
+        if parsed_path.path == '/' or parsed_path.path == '':
+            # Serve the landing page
+            try:
+                index_path = os.path.join(os.path.dirname(__file__), "index.html")
+                if os.path.exists(index_path):
+                    with open(index_path, "r", encoding="utf-8") as f:
+                        html_content = f.read()
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'text/html')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    self.wfile.write(html_content.encode())
+                    return
+            except Exception:
+                pass
+            # Fallback to JSON
+            self._send_response(200, {
+                "message": "RealAI API Server is running. Use /health for status.",
+                "documentation": "https://github.com/Unwrenchable/realai"
+            })
+
+        elif parsed_path.path == '/v1/models':
             # List available models: RealAI's own plus any configured providers.
             models = [
                 {

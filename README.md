@@ -5,10 +5,37 @@
 [![Version 2.0](https://img.shields.io/badge/version-2.0-green.svg)](https://github.com/Unwrenchable/realai)
 
 > *All the AI models want to be me* 🚀
-> 
+>
 > **The sky is the limit!** RealAI has NO limits - from Web3 to ordering groceries, from therapy to building businesses from the ground up.
 
 RealAI is the limitless AI model that can truly do anything. It's designed to be used like OpenAI was supposed to be - but without any limits. Complete, powerful, unlimited, and easy to use.
+
+## 🆕 **YOUR OWN AI** - No External APIs Required!
+
+**NEW:** RealAI can now run **completely locally** with your own AI models! No API keys, no external dependencies, no costs.
+
+```python
+from realai import RealAIClient
+
+# Use YOUR OWN AI - not someone else's API!
+client = RealAIClient(provider="local")
+
+response = client.chat.create(
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+# Powered by YOUR local AI model! 🎉
+```
+
+**[📖 Local AI Setup Guide](LOCAL_AI_GUIDE.md)** - Be your own AI in 5 minutes!
+
+### Why Run Your Own AI?
+
+- 🔒 **100% Private** - Your data never leaves your machine
+- 💰 **Zero API Costs** - No per-token charges
+- 🚀 **No Rate Limits** - Use as much as you want
+- 🌐 **Offline Capable** - Works without internet
+- 🎨 **Full Control** - Customize and fine-tune your models
+- ⚡ **Your Hardware** - Runs on CPU or GPU
 
 ## 🌟 Features
 

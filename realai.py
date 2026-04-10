@@ -616,10 +616,10 @@ class RealAI:
         """
         Generate a text completion (like OpenAI's GPT-3).
 
-        When an *api_key* and a recognised *provider* are configured the prompt
-        is forwarded to the real AI service via its chat/completions endpoint.
-        Falls back to a placeholder when no provider is configured or the
-        remote call fails.
+        Priority order:
+        1. Local models (if use_local=True and a model is loaded)
+        2. External API providers (if api_key is provided)
+        3. Placeholder response (fallback)
 
         Args:
             prompt (str): The text prompt
@@ -629,6 +629,44 @@ class RealAI:
         Returns:
             Dict[str, Any]: Text completion response
         """
+        # Try local model first if enabled
+        if self._use_local and self._llm_engine:
+            try:
+                # Try to use an already loaded model, or load default
+                if not self._llm_engine.is_loaded():
+                    default_llm = self._model_manager.config.get("default_llm")
+                    if default_llm and self._model_manager.is_model_available(default_llm):
+                        self._llm_engine.load_model(default_llm)
+
+                if self._llm_engine.is_loaded():
+                    response_text = self._llm_engine.generate(
+                        prompt,
+                        max_tokens=max_tokens or 512,
+                        temperature=temperature
+                    )
+
+                    if response_text:
+                        return self._with_metadata({
+                            "id": f"cmpl-local-{int(time.time())}",
+                            "object": "text_completion",
+                            "created": int(time.time()),
+                            "model": self._llm_engine.get_current_model() or "local",
+                            "choices": [{
+                                "text": response_text,
+                                "index": 0,
+                                "finish_reason": "stop"
+                            }],
+                            "usage": {
+                                "prompt_tokens": len(prompt.split()),
+                                "completion_tokens": len(response_text.split()),
+                                "total_tokens": len(prompt.split()) + len(response_text.split())
+                            }
+                        }, capability=ModelCapability.TEXT_GENERATION.value, modality="text",
+                           extra={"persona": self.persona, "source": "local"})
+            except Exception as e:
+                # Fall through to API or placeholder if local model fails
+                print(f"Local model inference failed: {e}")
+
         # Route to the real provider when credentials are available.
         # All modern providers expose a chat completions endpoint; wrap the
         # prompt as a single user message for maximum compatibility.
@@ -651,7 +689,7 @@ class RealAI:
                     "model": self._provider_model,
                     "choices": [{"text": text, "index": 0, "finish_reason": "stop"}],
                     "usage": usage,
-                }, capability=ModelCapability.TEXT_GENERATION.value, modality="text", extra={"persona": self.persona})
+                }, capability=ModelCapability.TEXT_GENERATION.value, modality="text", extra={"persona": self.persona, "source": "api"})
             except Exception:
                 # Broad catch is intentional: fall back gracefully for network
                 # errors, auth failures, or missing dependencies.
@@ -672,7 +710,7 @@ class RealAI:
                 "completion_tokens": 15,
                 "total_tokens": len(prompt.split()) + 15
             }
-        }, capability=ModelCapability.TEXT_GENERATION.value, modality="text", extra={"persona": self.persona})
+        }, capability=ModelCapability.TEXT_GENERATION.value, modality="text", extra={"persona": self.persona, "source": "placeholder"})
 
     def generate_image(
         self,

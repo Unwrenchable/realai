@@ -722,11 +722,12 @@ def run_server(host: str = "0.0.0.0", port: int = 8000):
     server_address = (host, port)
     httpd = HTTPServer(server_address, RealAIAPIHandler)
 
+    ui_host = 'localhost' if host in ('0.0.0.0', '::') else host
     print("="*60)
     print("RealAI API Server")
     print("="*60)
     print(f"Server running at http://{host}:{port}")
-    print(f"\n  *** Open the chat UI: http://localhost:{port}/ ***\n")
+    print(f"\n  *** Open the chat UI: http://{ui_host}:{port}/ ***\n")
     print("Available endpoints:")
     print("  GET  /              Web chat UI (browser)")
     print("  GET  /ui            Web chat UI (browser, alias)")

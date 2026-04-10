@@ -266,7 +266,7 @@ window.addEventListener('DOMContentLoaded', function() {
 });
 
 function loadSettings() {
-  var key      = localStorage.getItem(KEY_STORE)      || '';
+  var key      = sessionStorage.getItem(KEY_STORE)     || '';
   var provider = localStorage.getItem(PROVIDER_STORE) || 'auto';
   document.getElementById('api-key-input').value = key;
   var ps = document.getElementById('provider-select');
@@ -286,7 +286,6 @@ function loadModels() {
       select.appendChild(opt);
     });
     var saved = localStorage.getItem(MODEL_STORE) || 'realai-2.0';
-    if ([].slice.call(select.options).some(function(o){ return o.value === saved; })) {
       select.value = saved;
     }
   }).catch(function(){});
@@ -309,17 +308,20 @@ function saveKey() {
   var provider = document.getElementById('provider-select').value;
   var model    = document.getElementById('model-select').value;
   if (key) {
-    localStorage.setItem(KEY_STORE, key);
+    sessionStorage.setItem(KEY_STORE, key);
+    localStorage.removeItem(KEY_STORE);
   } else {
+    sessionStorage.removeItem(KEY_STORE);
     localStorage.removeItem(KEY_STORE);
   }
   localStorage.setItem(PROVIDER_STORE, provider);
   localStorage.setItem(MODEL_STORE, model);
   updateKeyStatus(key);
-  toast(key ? '\\u2713 API key saved in browser storage' : 'API key cleared');
+  toast(key ? '\\u2713 API key saved for this session only' : 'API key cleared');
 }
 
 function clearKey() {
+  sessionStorage.removeItem(KEY_STORE);
   localStorage.removeItem(KEY_STORE);
   document.getElementById('api-key-input').value = '';
   updateKeyStatus('');
@@ -392,7 +394,7 @@ function sendMessage() {
   isLoading = true;
   document.getElementById('send-btn').disabled = true;
 
-  var apiKey   = localStorage.getItem(KEY_STORE)      || '';
+  var apiKey   = sessionStorage.getItem(KEY_STORE)    || localStorage.getItem(KEY_STORE) || '';
   var provider = localStorage.getItem(PROVIDER_STORE) || 'auto';
   var model    = document.getElementById('model-select').value || 'realai-2.0';
 
@@ -483,7 +485,7 @@ function toast(msg) {
 class RealAIAPIHandler(BaseHTTPRequestHandler):
     """HTTP request handler for RealAI API."""
 
-    def _send_response(self, status_code: int, data: dict):
+    def _send_response(self, status_code: int, data):
         """Send JSON response."""
         self.send_response(status_code)
         self.send_header('Content-Type', 'application/json')
@@ -556,16 +558,13 @@ class RealAIAPIHandler(BaseHTTPRequestHandler):
 
         elif parsed_path.path == '/ui/providers':
             # Return provider metadata so the web UI can populate helper text.
-            # Never exposes actual key values — only whether a server-side env
-            # var is configured (so users know if they need to supply their own).
+            # Never exposes actual key values — only label and placeholder text.
             providers = []
             for name, meta in _PROVIDER_META.items():
-                env_var = PROVIDER_ENV_VARS.get(name, '')
                 providers.append({
                     "id": name,
                     "label": meta["label"],
                     "placeholder": meta["placeholder"],
-                    "has_server_key": bool(os.environ.get(env_var, '')),
                 })
             self._send_response(200, providers)
 
@@ -601,6 +600,15 @@ class RealAIAPIHandler(BaseHTTPRequestHandler):
             response["object"] = "model"
             response["id"] = model_id
             self._send_response(200, response)
+
+        elif parsed_path.path == '/v1/capabilities':
+            model = self._get_model()
+            self._send_response(200, model.get_capability_catalog())
+
+        elif parsed_path.path == '/v1/providers/capabilities':
+            model = self._get_model()
+            provider = parse_qs(parsed_path.query).get("provider", [None])[0]
+            self._send_response(200, model.get_provider_capabilities(provider=provider))
 
         elif parsed_path.path == '/health':
             self._send_response(200, {"status": "healthy", "model": "realai-2.0"})
@@ -644,6 +652,19 @@ class RealAIAPIHandler(BaseHTTPRequestHandler):
                     size=body.get('size', '1024x1024'),
                     quality=body.get('quality', 'standard'),
                     n=body.get('n', 1)
+                )
+                self._send_response(200, response)
+
+            elif parsed_path.path == '/v1/videos/generations':
+                response = model.generate_video(
+                    prompt=body.get('prompt', ''),
+                    image_url=body.get('image_url'),
+                    size=body.get('size', '1280x720'),
+                    duration=body.get('duration', 5),
+                    fps=body.get('fps', 24),
+                    n=body.get('n', 1),
+                    response_format=body.get('response_format', 'url'),
+                    model=body.get('model')
                 )
                 self._send_response(200, response)
 
@@ -735,6 +756,8 @@ def run_server(host: str = "0.0.0.0", port: int = 8000):
     print("  GET  /health")
     print("  GET  /v1/models")
     print("  GET  /v1/models/<model-id>")
+    print("  GET  /v1/capabilities")
+    print("  GET  /v1/providers/capabilities?provider=<name>")
     print("  POST /v1/chat/completions")
     print("  POST /v1/completions")
     print("  POST /v1/images/generations")

@@ -12,12 +12,13 @@ RealAI is the limitless AI model that can truly do anything. It's designed to be
 
 ## 🌟 Features
 
-RealAI provides **21 comprehensive capabilities** in a single, unified model:
+RealAI provides **22 comprehensive capabilities** in a single, unified model:
 
 ### Core AI Capabilities
 - 💬 **Chat Completion** - Conversational AI like ChatGPT
 - 📝 **Text Generation** - Complete text from prompts like GPT-3
 - 🎨 **Image Generation** - Create images from text like DALL-E
+- 🎬 **Video Generation** - Create videos from text or an image prompt
 - 👁️ **Image Analysis** - Understand and describe images like GPT-4 Vision
 - 💻 **Code Generation & Execution** - Generate, understand, and execute code
 - 🔤 **Embeddings** - Create semantic embeddings for text
@@ -51,6 +52,7 @@ RealAI provides **21 comprehensive capabilities** in a single, unified model:
 - 💚 Provide therapy and emotional support
 - ⛓️ Work with Web3 and blockchain
 - 💻 Code AND execute anything
+- 🎬 Generate videos from text and image prompts
 - 🔌 Be implemented anywhere via plugins
 - 🧠 Learn from every interaction
 - 🔗 Reason step-by-step with full transparency
@@ -189,6 +191,19 @@ analysis = client.images.analyze(
 print(analysis['description'])
 ```
 
+### Video Generation (text-to-video / image-to-video)
+
+```python
+video_response = client.videos.generate(
+    prompt="A cinematic sunrise over snowy mountains",
+    duration=5,
+    size="1280x720",
+    n=1
+)
+
+print(video_response['data'][0]['url'])
+```
+
 ### Code Generation (Codex-style)
 
 ```python
@@ -255,6 +270,20 @@ research = client.web.research(
 
 print(research['findings'])
 print(research['sources'])
+print(research['citations'])   # citation metadata
+print(research['freshness'])   # live | cached | fallback
+```
+
+### Personas 🎭
+
+```python
+# List and switch persona profiles
+print(client.personas.list())
+client.personas.set("analyst")
+
+# Persona influences chat style and appears in response metadata
+reply = client.chat.create(messages=[{"role": "user", "content": "Give me a launch plan"}])
+print(reply["realai_meta"]["persona"])
 ```
 
 ### Task Automation 🛒
@@ -548,9 +577,12 @@ curl -X POST http://localhost:8000/v1/chat/completions \
 |--------|------|-------------|
 | GET | `/health` | Health check |
 | GET | `/v1/models` | List models |
+| GET | `/v1/capabilities` | Capability catalog grouped by domain |
+| GET | `/v1/providers/capabilities?provider=<name>` | Provider capability map |
 | POST | `/v1/chat/completions` | Chat (OpenAI-compatible) |
 | POST | `/v1/completions` | Text completion |
 | POST | `/v1/images/generations` | Image generation |
+| POST | `/v1/videos/generations` | Video generation |
 | POST | `/v1/embeddings` | Text embeddings |
 | POST | `/v1/audio/transcriptions` | Speech-to-text |
 | POST | `/v1/audio/speech` | Text-to-speech |
@@ -643,6 +675,47 @@ RealAI supports **17 comprehensive capabilities** out of the box:
 - ✅ **No Lock-in**: Open source and free to use
 - ✅ **Lightweight**: Minimal dependencies
 - ✅ **Learns & Adapts**: Gets smarter with every interaction
+
+## Deployment
+
+RealAI can be deployed in multiple ways to fit your needs:
+
+### 📋 **[Complete Deployment Guide](DEPLOYMENT.md)**
+
+See **[DEPLOYMENT.md](DEPLOYMENT.md)** for comprehensive deployment instructions covering:
+- 🏠 **Local Development** - Quick setup for development and testing
+- 💻 **Desktop Application** - Windows .exe with GUI and built-in server
+- 🌐 **API Server** - Deploy on any server (VPS, cloud, on-premises)
+- ☁️ **AWS Lambda** - Serverless deployment with split architecture
+- 🔧 **Configuration** - Environment variables and provider setup
+- ✅ **Testing** - Verify your deployment
+- 🛠️ **Troubleshooting** - Common issues and solutions
+
+### Quick Start Options
+
+**Local Development:**
+```bash
+git clone https://github.com/Unwrenchable/realai.git
+cd realai
+pip install -e .
+export REALAI_OPENAI_API_KEY=sk-...
+python api_server.py
+```
+
+**AWS Lambda (Serverless):**
+```bash
+sam build
+sam deploy --guided
+```
+
+**Desktop App (Windows):**
+```bash
+python realai_gui.py
+# Or build standalone .exe:
+pyinstaller realai_launcher.spec
+```
+
+For detailed instructions, see **[DEPLOYMENT.md](DEPLOYMENT.md)**.
 
 ## Contributing
 

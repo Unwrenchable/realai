@@ -117,6 +117,87 @@ PROVIDER_ENV_VARS: Dict[str, str] = {
     "perplexity": "REALAI_PERPLEXITY_API_KEY",
 }
 
+#: Provider capability map used for capability-aware routing and fallbacks.
+#: Values are capability names from :class:`ModelCapability`.
+PROVIDER_CAPABILITY_MAP: Dict[str, List[str]] = {
+    "openai": [
+        "text_generation", "image_generation", "video_generation",
+        "image_analysis", "code_generation", "embeddings",
+        "audio_transcription", "audio_generation", "translation",
+    ],
+    "anthropic": [
+        "text_generation", "code_generation", "translation",
+        "knowledge_synthesis", "chain_of_thought", "self_reflection",
+        "multi_agent",
+    ],
+    "grok": [
+        "text_generation", "image_generation", "image_analysis",
+        "video_generation", "code_generation", "translation",
+        "web_research", "chain_of_thought", "knowledge_synthesis",
+        "multi_agent",
+    ],
+    "gemini": [
+        "text_generation", "image_analysis", "code_generation",
+        "embeddings", "translation", "audio_transcription",
+        "chain_of_thought", "knowledge_synthesis",
+    ],
+    "openrouter": [
+        "text_generation", "image_generation", "video_generation",
+        "image_analysis", "code_generation", "embeddings",
+        "audio_transcription", "audio_generation", "translation",
+        "web_research", "task_automation", "voice_interaction",
+        "business_planning", "therapy_counseling", "web3_integration",
+        "code_execution", "plugin_system", "memory_learning",
+        "self_reflection", "chain_of_thought", "knowledge_synthesis",
+        "multi_agent",
+    ],
+    "mistral": [
+        "text_generation", "code_generation", "embeddings",
+        "translation", "chain_of_thought",
+    ],
+    "together": [
+        "text_generation", "code_generation", "embeddings",
+        "translation", "image_generation",
+    ],
+    "deepseek": [
+        "text_generation", "code_generation", "translation",
+        "chain_of_thought", "knowledge_synthesis",
+    ],
+    "perplexity": [
+        "text_generation", "web_research", "translation",
+        "chain_of_thought", "knowledge_synthesis",
+    ],
+}
+
+#: Persona profiles that modify response style while preserving answer quality.
+PERSONA_PROFILES: Dict[str, Dict[str, str]] = {
+    "balanced": {
+        "description": "Neutral, concise, and practical assistant style.",
+        "system_prompt": "",
+    },
+    "analyst": {
+        "description": "Data-first, structured, and verification-oriented style.",
+        "system_prompt": (
+            "Adopt an analytical style: structure your response clearly, "
+            "state assumptions, and prefer verifiable statements."
+        ),
+    },
+    "creative": {
+        "description": "Imaginative, expressive, and idea-rich style.",
+        "system_prompt": (
+            "Adopt a creative style: generate novel ideas and vivid language "
+            "while remaining relevant to the user's goal."
+        ),
+    },
+    "coach": {
+        "description": "Supportive, motivational, and action-oriented style.",
+        "system_prompt": (
+            "Adopt a coaching style: be encouraging, practical, and provide "
+            "clear next steps."
+        ),
+    },
+}
+
 
 def _detect_provider(api_key: Optional[str], provider: Optional[str]) -> Optional[str]:
     """Detect the AI provider from an explicit name or API key prefix.
@@ -141,6 +222,7 @@ class ModelCapability(Enum):
     """Supported capabilities of the RealAI model."""
     TEXT_GENERATION = "text_generation"
     IMAGE_GENERATION = "image_generation"
+    VIDEO_GENERATION = "video_generation"
     IMAGE_ANALYSIS = "image_analysis"
     CODE_GENERATION = "code_generation"
     EMBEDDINGS = "embeddings"
@@ -161,6 +243,33 @@ class ModelCapability(Enum):
     CHAIN_OF_THOUGHT = "chain_of_thought"
     KNOWLEDGE_SYNTHESIS = "knowledge_synthesis"
     MULTI_AGENT = "multi_agent"
+
+
+#: Canonical capability-domain mapping used for discovery across model/client/API.
+CAPABILITY_DOMAIN_MAP: Dict[ModelCapability, str] = {
+    ModelCapability.TEXT_GENERATION: "generation",
+    ModelCapability.IMAGE_GENERATION: "generation",
+    ModelCapability.VIDEO_GENERATION: "generation",
+    ModelCapability.AUDIO_GENERATION: "generation",
+    ModelCapability.CODE_GENERATION: "generation",
+    ModelCapability.IMAGE_ANALYSIS: "analysis",
+    ModelCapability.AUDIO_TRANSCRIPTION: "analysis",
+    ModelCapability.EMBEDDINGS: "analysis",
+    ModelCapability.TRANSLATION: "analysis",
+    ModelCapability.WEB_RESEARCH: "integrations",
+    ModelCapability.TASK_AUTOMATION: "tools",
+    ModelCapability.VOICE_INTERACTION: "tools",
+    ModelCapability.BUSINESS_PLANNING: "tools",
+    ModelCapability.THERAPY_COUNSELING: "tools",
+    ModelCapability.WEB3_INTEGRATION: "integrations",
+    ModelCapability.CODE_EXECUTION: "tools",
+    ModelCapability.PLUGIN_SYSTEM: "integrations",
+    ModelCapability.MEMORY_LEARNING: "memory",
+    ModelCapability.SELF_REFLECTION: "reasoning",
+    ModelCapability.CHAIN_OF_THOUGHT: "reasoning",
+    ModelCapability.KNOWLEDGE_SYNTHESIS: "reasoning",
+    ModelCapability.MULTI_AGENT: "orchestration",
+}
 
 
 class RealAI:
@@ -219,10 +328,56 @@ class RealAI:
             self._provider_model: str = cfg.get("default_model", model_name)
         else:
             self._provider_model = model_name
+        self.response_contract_version = "2026-04-08"
+        self.persona = "balanced"
+        self._web_research_cache: Dict[str, Dict[str, Any]] = {}
+        self._web_research_cache_ttl = 900
 
     # ------------------------------------------------------------------
     # Private helpers for real provider API calls
     # ------------------------------------------------------------------
+
+    def _provider_supports(self, capability_name: str) -> bool:
+        """Return whether the active provider is expected to support a capability."""
+        if not self.provider:
+            return True
+        supported = PROVIDER_CAPABILITY_MAP.get(self.provider)
+        if not supported:
+            return True
+        return capability_name in supported
+
+    def _with_metadata(
+        self,
+        response: Dict[str, Any],
+        capability: str,
+        modality: Optional[str] = None,
+        extra: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Attach canonical RealAI response metadata."""
+        payload = dict(response)
+        payload["realai_meta"] = {
+            "contract_version": self.response_contract_version,
+            "capability": capability,
+            "modality": modality or "text",
+            "provider": self.provider or "realai-local",
+            "model": self._provider_model if self.provider else self.model_name,
+            "timestamp": int(time.time()),
+            **(extra or {}),
+        }
+        return payload
+
+    @staticmethod
+    def _parse_json_block(text: str) -> Dict[str, Any]:
+        """Best-effort parser for plain JSON or fenced JSON blocks."""
+        cleaned = text.strip()
+        if "```" in cleaned:
+            parts = cleaned.split("```")
+            if len(parts) >= 3:
+                block = parts[1]
+                first_nl = block.find("\n")
+                cleaned = (block[first_nl + 1:] if first_nl != -1 else block).strip()
+        parsed = json.loads(cleaned)
+        return parsed if isinstance(parsed, dict) else {}
 
     def _call_openai_compat(
         self,
@@ -335,13 +490,25 @@ class RealAI:
         Returns:
             Dict[str, Any]: Chat completion response
         """
+        messages_to_send = list(messages)
+        persona_cfg = PERSONA_PROFILES.get(self.persona, PERSONA_PROFILES["balanced"])
+        persona_prompt = persona_cfg.get("system_prompt", "").strip()
+        if persona_prompt:
+            messages_to_send = [{"role": "system", "content": persona_prompt}] + messages_to_send
+
         # Route to the real provider when credentials are available.
         if self.api_key and self.provider:
             try:
                 if self._api_format == "anthropic":
-                    return self._call_anthropic(messages, temperature, max_tokens)
+                    provider_response = self._call_anthropic(messages_to_send, temperature, max_tokens)
                 else:
-                    return self._call_openai_compat(messages, temperature, max_tokens, stream)
+                    provider_response = self._call_openai_compat(messages_to_send, temperature, max_tokens, stream)
+                return self._with_metadata(
+                    provider_response,
+                    capability=ModelCapability.TEXT_GENERATION.value,
+                    modality="text",
+                    extra={"persona": self.persona},
+                )
             except Exception:
                 # Broad catch is intentional: we want to fall back gracefully
                 # for network errors, auth failures, missing `requests` package,
@@ -349,7 +516,7 @@ class RealAI:
                 pass
 
         # Placeholder response (no provider configured or call failed).
-        return {
+        return self._with_metadata({
             "id": f"chatcmpl-{int(time.time())}",
             "object": "chat.completion",
             "created": int(time.time()),
@@ -363,11 +530,11 @@ class RealAI:
                 "finish_reason": "stop"
             }],
             "usage": {
-                "prompt_tokens": sum(len(msg.get("content", "").split()) for msg in messages),
+                "prompt_tokens": sum(len(msg.get("content", "").split()) for msg in messages_to_send),
                 "completion_tokens": 20,
-                "total_tokens": sum(len(msg.get("content", "").split()) for msg in messages) + 20
+                "total_tokens": sum(len(msg.get("content", "").split()) for msg in messages_to_send) + 20
             }
-        }
+        }, capability=ModelCapability.TEXT_GENERATION.value, modality="text", extra={"persona": self.persona})
 
     def text_completion(
         self,
@@ -406,20 +573,20 @@ class RealAI:
                 if chat_resp.get("choices"):
                     text = chat_resp["choices"][0].get("message", {}).get("content", "")
                 usage = chat_resp.get("usage", {})
-                return {
+                return self._with_metadata({
                     "id": chat_resp.get("id", f"cmpl-{int(time.time())}"),
                     "object": "text_completion",
                     "created": chat_resp.get("created", int(time.time())),
                     "model": self._provider_model,
                     "choices": [{"text": text, "index": 0, "finish_reason": "stop"}],
                     "usage": usage,
-                }
+                }, capability=ModelCapability.TEXT_GENERATION.value, modality="text", extra={"persona": self.persona})
             except Exception:
                 # Broad catch is intentional: fall back gracefully for network
                 # errors, auth failures, or missing dependencies.
                 pass
 
-        return {
+        return self._with_metadata({
             "id": f"cmpl-{int(time.time())}",
             "object": "text_completion",
             "created": int(time.time()),
@@ -434,7 +601,7 @@ class RealAI:
                 "completion_tokens": 15,
                 "total_tokens": len(prompt.split()) + 15
             }
-        }
+        }, capability=ModelCapability.TEXT_GENERATION.value, modality="text", extra={"persona": self.persona})
 
     def generate_image(
         self,
@@ -465,7 +632,130 @@ class RealAI:
                 for i in range(n)
             ]
         }
-        return response
+        return self._with_metadata(
+            response,
+            capability=ModelCapability.IMAGE_GENERATION.value,
+            modality="image",
+        )
+
+    def generate_video(
+        self,
+        prompt: str,
+        image_url: Optional[str] = None,
+        size: str = "1280x720",
+        duration: int = 5,
+        fps: int = 24,
+        n: int = 1,
+        response_format: str = "url",
+        model: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Generate a video from text or an input image.
+
+        Args:
+            prompt (str): Prompt describing the requested video.
+            image_url (Optional[str]): Optional source image for image-to-video.
+            size (str): Output dimensions (e.g., "1280x720").
+            duration (int): Video duration in seconds.
+            fps (int): Frames per second.
+            n (int): Number of videos to generate.
+            response_format (str): "url" or "b64_json".
+            model (Optional[str]): Optional provider model override.
+
+        Returns:
+            Dict[str, Any]: Video generation response in OpenAI-style data format.
+        """
+        if response_format not in ("url", "b64_json"):
+            response_format = "url"
+
+        safe_n = max(1, int(n))
+        request_model = model or self._provider_model
+        mode = "image_to_video" if image_url else "text_to_video"
+
+        # Attempt real provider call when configured and endpoint is available.
+        if (
+            self.api_key
+            and self.provider
+            and self._api_format == "openai"
+            and self.base_url
+            and self._provider_supports(ModelCapability.VIDEO_GENERATION.value)
+        ):
+            try:
+                import requests as _requests
+
+                payload: Dict[str, Any] = {
+                    "model": request_model,
+                    "prompt": prompt,
+                    "size": size,
+                    "duration": duration,
+                    "fps": fps,
+                    "n": safe_n,
+                    "response_format": response_format,
+                }
+                if image_url:
+                    # Keep both keys for broader provider compatibility:
+                    # some APIs expect `image_url`, others expect `image`.
+                    payload["image_url"] = image_url
+                    payload["image"] = image_url
+
+                resp = _requests.post(
+                    f"{self.base_url}/videos/generations",
+                    json=payload,
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {self.api_key}",
+                    },
+                    timeout=120,
+                )
+                resp.raise_for_status()
+                provider_response = resp.json()
+                if isinstance(provider_response, dict) and provider_response.get("data"):
+                        return self._with_metadata(
+                            provider_response,
+                            capability=ModelCapability.VIDEO_GENERATION.value,
+                            modality="video",
+                            extra={"mode": mode},
+                        )
+            except Exception:
+                # Fall back to placeholder response if provider does not support
+                # this endpoint or request execution fails for any reason.
+                pass
+
+        # Graceful local placeholder response.
+        data: List[Dict[str, Any]] = []
+        for i in range(safe_n):
+            item: Dict[str, Any] = {
+                "revised_prompt": prompt,
+                "mode": mode,
+            }
+            if image_url:
+                item["source_image_url"] = image_url
+            if response_format == "b64_json":
+                try:
+                    import base64 as _base64
+                    placeholder_blob = (
+                        f"RealAI placeholder video payload {i + 1}".encode("utf-8")
+                    )
+                    item["b64_json"] = _base64.b64encode(placeholder_blob).decode("ascii")
+                except Exception:
+                    item["b64_json"] = ""
+            else:
+                item["url"] = f"https://realai.example.com/generated-video-{i}.mp4"
+            data.append(item)
+
+        return self._with_metadata({
+            "created": int(time.time()),
+            "data": data,
+            "model": request_model,
+            "duration": duration,
+            "size": size,
+            "fps": fps,
+            "response_format": response_format,
+            "note": (
+                "Placeholder response. Configure a provider endpoint that supports "
+                "video generation for real video outputs."
+            ),
+        }, capability=ModelCapability.VIDEO_GENERATION.value, modality="video", extra={"mode": mode})
     
     def analyze_image(self, image_url: str, prompt: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -484,7 +774,11 @@ class RealAI:
             "prompt": prompt,
             "confidence": 0.95
         }
-        return response
+        return self._with_metadata(
+            response,
+            capability=ModelCapability.IMAGE_ANALYSIS.value,
+            modality="image",
+        )
     
     def generate_code(
         self,
@@ -639,21 +933,21 @@ class RealAI:
                 except Exception:
                     continue
 
-            return {
+            return self._with_metadata({
                 "text": " ".join(p for p in text_parts if p),
                 "language": language or "en",
                 "duration": wf.getnframes() / wf.getframerate(),
                 "segments": [],
-            }
+            }, capability=ModelCapability.AUDIO_TRANSCRIPTION.value, modality="audio")
 
         except Exception:
             # Fallback stub
-            return {
+            return self._with_metadata({
                 "text": "RealAI has transcribed your audio file.",
                 "language": language or "en",
                 "duration": 10.5,
                 "segments": []
-            }
+            }, capability=ModelCapability.AUDIO_TRANSCRIPTION.value, modality="audio")
     
     def generate_audio(
         self,
@@ -695,21 +989,21 @@ class RealAI:
             engine.runAndWait()
 
             duration = len(text.split()) * 0.5
-            return {
+            return self._with_metadata({
                 "audio_url": out_path,
                 "duration": duration,
                 "voice": voice,
                 "model": model
-            }
+            }, capability=ModelCapability.AUDIO_GENERATION.value, modality="audio")
 
         except Exception:
             # Fallback simulated response
-            return {
+            return self._with_metadata({
                 "audio_url": "https://realai.example.com/generated-audio.mp3",
                 "duration": len(text.split()) * 0.5,
                 "voice": voice,
                 "model": model
-            }
+            }, capability=ModelCapability.AUDIO_GENERATION.value, modality="audio")
     
     def translate(
         self,
@@ -734,7 +1028,11 @@ class RealAI:
             "target_language": target_language,
             "confidence": 0.95
         }
-        return response
+        return self._with_metadata(
+            response,
+            capability=ModelCapability.TRANSLATION.value,
+            modality="text",
+        )
     
     def web_research(
         self,
@@ -753,9 +1051,21 @@ class RealAI:
         Returns:
             Dict[str, Any]: Research results with findings and sources
         """
-        # Attempt to perform simple web research using HTTP fetch + HTML parsing.
-        # Falls back to canned response on any network or dependency errors.
+        # Unified retrieval layer with source details, citations, and freshness/cache metadata.
         max_results = {"quick": 1, "standard": 3, "deep": 5}.get(depth, 3)
+        cache_key = f"{query}|{depth}|{','.join(sources or [])}"
+        now = int(time.time())
+
+        cached = self._web_research_cache.get(cache_key)
+        if cached and now - int(cached.get("cached_at", 0)) < self._web_research_cache_ttl:
+            cached_payload = dict(cached["payload"])
+            cached_payload["cached"] = True
+            cached_payload["freshness"] = "cached"
+            return self._with_metadata(
+                cached_payload,
+                capability=ModelCapability.WEB_RESEARCH.value,
+                modality="text",
+            )
 
         findings_list: List[Dict[str, Any]] = []
         resolved_sources: List[str] = []
@@ -800,10 +1110,20 @@ class RealAI:
                     title = (page.title.string.strip() if page.title and page.title.string else url)
                     p = page.find("p")
                     snippet = p.get_text().strip() if p else ""
+                    citation_score = 0.4
+                    if url.startswith("https://"):
+                        citation_score += 0.2
+                    if len(snippet) > 80:
+                        citation_score += 0.2
+                    if len(title) > 8:
+                        citation_score += 0.1
+                    citation_score = min(0.99, round(citation_score, 2))
                     findings_list.append({
                         "url": url,
                         "title": title,
-                        "snippet": snippet
+                        "snippet": snippet,
+                        "citation_score": citation_score,
+                        "freshness": "live",
                     })
                     resolved_sources.append(url)
                 except Exception:
@@ -812,8 +1132,8 @@ class RealAI:
 
             # Build an aggregated findings string
             findings = []
-            for f in findings_list:
-                summary_line = f"{f['title']}: {f['snippet'][:300]}"
+            for idx, f in enumerate(findings_list, start=1):
+                summary_line = f"[{idx}] {f['title']}: {f['snippet'][:300]}"
                 findings.append(summary_line)
 
             response = {
@@ -821,15 +1141,35 @@ class RealAI:
                 "findings": "\n\n".join(findings) if findings else "No substantive findings retrieved.",
                 "summary": f"Aggregated {len(findings_list)} source(s) for query '{query}'.",
                 "sources": resolved_sources if resolved_sources else urls_to_fetch,
+                "source_details": findings_list,
+                "citations": [
+                    {
+                        "index": idx,
+                        "url": item["url"],
+                        "title": item["title"],
+                        "citation_score": item["citation_score"],
+                    }
+                    for idx, item in enumerate(findings_list, start=1)
+                ],
                 "depth": depth,
                 "confidence": 0.7 if findings_list else 0.2,
-                "timestamp": int(time.time())
+                "timestamp": now,
+                "freshness": "live",
+                "cached": False,
             }
-            return response
+            self._web_research_cache[cache_key] = {
+                "cached_at": now,
+                "payload": response,
+            }
+            return self._with_metadata(
+                response,
+                capability=ModelCapability.WEB_RESEARCH.value,
+                modality="text",
+            )
 
         except Exception:
             # If any dependency or network issue occurs, return previous canned response
-            return {
+            return self._with_metadata({
                 "query": query,
                 "findings": "RealAI has researched your query comprehensively across the web.",
                 "summary": "Based on extensive research, here are the key findings and insights.",
@@ -840,8 +1180,12 @@ class RealAI:
                 ],
                 "depth": depth,
                 "confidence": 0.92,
-                "timestamp": int(time.time())
-            }
+                "timestamp": now,
+                "freshness": "fallback",
+                "cached": False,
+                "source_details": [],
+                "citations": [],
+            }, capability=ModelCapability.WEB_RESEARCH.value, modality="text")
     
     def automate_task(
         self,
@@ -1756,7 +2100,8 @@ class RealAI:
             Dict with ``status``, ``task``, ``agent_results`` (dict of
             role → output), ``final_output``, and ``agents_used`` keys.
         """
-        roles = agent_roles or ["planner", "researcher", "critic", "synthesizer"]
+        default_roles = ["planner", "researcher", "critic", "synthesizer"]
+        roles = agent_roles or default_roles
 
         # Static fallback
         agent_results: Dict[str, str] = {
@@ -1764,6 +2109,17 @@ class RealAI:
             for role in roles
         }
         final_output = f"Multi-agent analysis of '{task}' complete."
+        execution_plan: List[str] = [
+            "Detect user intent",
+            "Route to specialist agents",
+            "Execute specialist analysis",
+            "Synthesize final answer",
+        ]
+        verification = {
+            "status": "heuristic",
+            "confidence": 0.7,
+            "notes": "Fallback verification applied.",
+        }
 
         _ROLE_PROMPTS: Dict[str, str] = {
             "planner": (
@@ -1793,6 +2149,33 @@ class RealAI:
         }
 
         try:
+            # Planner stage (agentic-by-default)
+            planner_result = self.chat_completion([
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a planning agent. Return JSON with keys: "
+                        "execution_plan (array of concise steps), "
+                        "recommended_roles (array of role names)."
+                    ),
+                },
+                {"role": "user", "content": f"Task: {task}"},
+            ])
+            planner_content = (
+                planner_result.get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+                .strip()
+            )
+            if planner_content:
+                parsed_plan = self._parse_json_block(planner_content)
+                if isinstance(parsed_plan.get("execution_plan"), list):
+                    execution_plan = [str(x) for x in parsed_plan["execution_plan"]][:8]
+                if not agent_roles and isinstance(parsed_plan.get("recommended_roles"), list):
+                    routed_roles = [str(x).strip().lower() for x in parsed_plan["recommended_roles"] if str(x).strip()]
+                    if routed_roles:
+                        roles = routed_roles[:6]
+
             for role in roles:
                 system_prompt = _ROLE_PROMPTS.get(
                     role,
@@ -1843,17 +2226,50 @@ class RealAI:
             if coord_content:
                 final_output = coord_content
 
+            # Verification stage
+            verifier_result = self.chat_completion([
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a verification agent. Return JSON with keys: "
+                        "confidence (float 0-1), notes (string)."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Task: {task}\n\nFinal output:\n{final_output}\n\n"
+                        f"Agent contributions:\n{agent_results}"
+                    ),
+                },
+            ])
+            verifier_content = (
+                verifier_result.get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+                .strip()
+            )
+            if verifier_content:
+                parsed_verifier = self._parse_json_block(verifier_content)
+                verification = {
+                    "status": "model_verified",
+                    "confidence": float(parsed_verifier.get("confidence", 0.75)),
+                    "notes": str(parsed_verifier.get("notes", "")),
+                }
+
         except Exception:
             pass  # fall back to static values
 
-        return {
+        return self._with_metadata({
             "status": "success",
             "task": task,
             "agents_used": roles,
+            "execution_plan": execution_plan,
             "agent_results": agent_results,
             "final_output": final_output,
+            "verification": verification,
             "provider": self.provider,
-        }
+        }, capability=ModelCapability.MULTI_AGENT.value, modality="text")
 
     def generate_speech(self, text: str, voice: str = "alloy", model: str = "realai-tts") -> Dict[str, Any]:
         """Convenience alias for :meth:`generate_audio` for speech synthesis.
@@ -1883,6 +2299,58 @@ class RealAI:
             List[str]: List of capability names
         """
         return [cap.value for cap in self.capabilities]
+
+    def get_capability_catalog(self) -> Dict[str, Any]:
+        """Return canonical capability metadata grouped by domain."""
+        items: List[Dict[str, Any]] = []
+        for cap in self.capabilities:
+            items.append({
+                "name": cap.value,
+                "domain": CAPABILITY_DOMAIN_MAP.get(cap, "general"),
+                "provider_supported": self._provider_supports(cap.value),
+            })
+
+        domains: Dict[str, List[str]] = {}
+        for entry in items:
+            domains.setdefault(entry["domain"], []).append(entry["name"])
+
+        return {
+            "capabilities": items,
+            "domains": domains,
+            "count": len(items),
+        }
+
+    def get_provider_capabilities(self, provider: Optional[str] = None) -> Dict[str, Any]:
+        """Return supported capabilities for a provider."""
+        provider_name = (provider or self.provider or "realai-local").lower()
+        all_caps = self.get_capabilities()
+        supported = PROVIDER_CAPABILITY_MAP.get(provider_name, all_caps)
+        unsupported = sorted([c for c in all_caps if c not in supported])
+        return {
+            "provider": provider_name,
+            "supported_capabilities": sorted(supported),
+            "unsupported_capabilities": unsupported,
+        }
+
+    def set_persona(self, persona: str) -> Dict[str, str]:
+        """Set the active persona profile used for chat-style outputs."""
+        key = persona.lower().strip()
+        if key not in PERSONA_PROFILES:
+            raise ValueError(
+                f"Unsupported persona '{persona}'. Available: {', '.join(sorted(PERSONA_PROFILES.keys()))}"
+            )
+        self.persona = key
+        return {
+            "persona": self.persona,
+            "description": PERSONA_PROFILES[self.persona]["description"],
+        }
+
+    def get_personas(self) -> Dict[str, Dict[str, str]]:
+        """List available persona profiles."""
+        return {
+            name: {"description": cfg["description"]}
+            for name, cfg in PERSONA_PROFILES.items()
+        }
     
     def get_model_info(self) -> Dict[str, Any]:
         """
@@ -1895,6 +2363,9 @@ class RealAI:
             "name": self.model_name,
             "version": self.version,
             "capabilities": self.get_capabilities(),
+            "capability_catalog": self.get_capability_catalog(),
+            "provider_capabilities": self.get_provider_capabilities(),
+            "persona": self.persona,
             "description": "RealAI - The limitless AI that can truly do anything. The sky is the limit!"
         }
 
@@ -1933,6 +2404,7 @@ class RealAIClient:
         self.chat = self.ChatCompletions(self.model)
         self.completions = self.Completions(self.model)
         self.images = self.Images(self.model)
+        self.videos = self.Videos(self.model)
         self.embeddings = self.Embeddings(self.model)
         self.audio = self.Audio(self.model)
 
@@ -1944,6 +2416,7 @@ class RealAIClient:
         self.therapy = self.Therapy(self.model)
         self.web3 = self.Web3(self.model)
         self.plugins = self.Plugins(self.model)
+        self.personas = self.Personas(self.model)
 
         # Next-generation capabilities
         self.reasoning = self.Reasoning(self.model)
@@ -1982,6 +2455,15 @@ class RealAIClient:
         def analyze(self, **kwargs) -> Dict[str, Any]:
             """Analyze an image."""
             return self.model.analyze_image(**kwargs)
+
+    class Videos:
+        """Video generation interface."""
+        def __init__(self, model: RealAI):
+            self.model = model
+
+        def generate(self, **kwargs) -> Dict[str, Any]:
+            """Generate a video."""
+            return self.model.generate_video(**kwargs)
     
     class Embeddings:
         """Embeddings interface."""
@@ -2172,6 +2654,19 @@ class RealAIClient:
         def coordinate(self, task: str, roles: Optional[List[str]] = None) -> Dict[str, Any]:
             """Coordinate a specific set of agent roles for a task."""
             return self.model.orchestrate_agents(task=task, agent_roles=roles)
+
+    class Personas:
+        """Persona profile management interface."""
+        def __init__(self, model: RealAI):
+            self.model = model
+
+        def list(self) -> Dict[str, Dict[str, str]]:
+            """List available persona profiles."""
+            return self.model.get_personas()
+
+        def set(self, persona: str) -> Dict[str, str]:
+            """Set active persona profile."""
+            return self.model.set_persona(persona)
 
 
 def main():

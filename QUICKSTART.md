@@ -20,7 +20,7 @@ Try the built-in examples:
 python examples.py
 ```
 
-This will demonstrate all 8 capabilities of RealAI.
+This demonstrates 9 core capabilities in a quick-start flow.
 
 ## Step 3: Use in Your Code
 
@@ -41,6 +41,13 @@ response = client.chat.create(
 )
 
 print(response['choices'][0]['message']['content'])
+
+# Generate a short video
+video = client.videos.generate(
+    prompt="A smooth drone shot over a tropical beach",
+    duration=4
+)
+print(video['data'][0]['url'])
 ```
 
 ## Step 4: Launch the GUI — One .exe, Everything Included
@@ -117,16 +124,17 @@ python test_realai.py
 
 ## What Can You Do?
 
-RealAI provides 8 major capabilities:
+This quick-start walkthrough covers 9 core capabilities:
 
 1. **Chat** - Conversational AI
 2. **Text** - Text generation and completion
 3. **Images** - Generate and analyze images
-4. **Code** - Generate and understand code
-5. **Embeddings** - Semantic text vectors
-6. **Audio** - Transcribe and generate audio
-7. **Translation** - Multilingual translation
-8. **Analysis** - Image and content understanding
+4. **Videos** - Generate videos from text or an input image
+5. **Code** - Generate and understand code
+6. **Embeddings** - Semantic text vectors
+7. **Audio** - Transcribe and generate audio
+8. **Translation** - Multilingual translation
+9. **Analysis** - Image and content understanding
 
 ## Learn More
 

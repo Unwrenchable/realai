@@ -1,10 +1,11 @@
 # RealAI Requirements
-# Core packages – required for the web UI and chat completions (Vercel-compatible)
+# Core packages – required for the web UI and chat completions
+# Compatible with Vercel and AWS Lambda deployments (lightweight, under 50 MB)
 requests>=2.28.0
 beautifulsoup4>=4.12.0
 
 # Optional features – install manually for local / full-featured use:
-#   pip install sentence-transformers  # semantic search / embeddings
-#   pip install pyttsx3                # text-to-speech
-#   pip install vosk                   # speech recognition
-#   pip install web3                   # blockchain / Web3 integration
+#   pip install sentence-transformers>=2.2.2  # semantic search / embeddings (~2-3 GB)
+#   pip install pyttsx3>=2.90                 # text-to-speech
+#   pip install vosk>=0.3.45                  # speech recognition (~1-2 GB)
+#   pip install web3>=6.0.0                   # blockchain / Web3 integration

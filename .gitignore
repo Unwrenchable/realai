@@ -136,3 +136,7 @@ Thumbs.db
 
 # Temporary files
 /tmp/
+
+# AWS SAM
+.aws-sam/
+samconfig.toml

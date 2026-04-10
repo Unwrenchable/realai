@@ -26,6 +26,7 @@ def test_client_initialization():
     assert hasattr(client, 'chat')
     assert hasattr(client, 'completions')
     assert hasattr(client, 'images')
+    assert hasattr(client, 'videos')
     assert hasattr(client, 'embeddings')
     assert hasattr(client, 'audio')
     # New capabilities
@@ -36,6 +37,7 @@ def test_client_initialization():
     assert hasattr(client, 'therapy')
     assert hasattr(client, 'web3')
     assert hasattr(client, 'plugins')
+    assert hasattr(client, 'personas')
     # Next-generation capability sub-clients
     assert hasattr(client, 'reasoning')
     assert hasattr(client, 'synthesis')
@@ -96,6 +98,22 @@ def test_image_analysis():
     assert 'analysis' in response
     assert 'description' in response
     print("✓ Image analysis test passed")
+
+
+def test_video_generation():
+    """Test video generation."""
+    print("Testing video generation...")
+    client = RealAIClient()
+    response = client.videos.generate(
+        prompt="A drone flyover of a futuristic city",
+        duration=4,
+        n=1
+    )
+    assert 'created' in response
+    assert 'data' in response
+    assert len(response['data']) > 0
+    assert 'url' in response['data'][0]
+    print("✓ Video generation test passed")
 
 
 def test_code_generation():
@@ -169,6 +187,7 @@ def test_model_capabilities():
     assert len(capabilities) >= 17
     assert 'text_generation' in capabilities
     assert 'image_generation' in capabilities
+    assert 'video_generation' in capabilities
     assert 'code_generation' in capabilities
     assert 'web_research' in capabilities
     assert 'task_automation' in capabilities
@@ -206,7 +225,38 @@ def test_web_research():
     assert 'query' in response
     assert 'findings' in response
     assert 'sources' in response
+    assert 'citations' in response
+    assert 'freshness' in response
     print("✓ Web research test passed")
+
+
+def test_capability_catalog_and_provider_capabilities():
+    """Test unified capability catalog and provider capability map access."""
+    print("Testing capability catalog/provider capabilities...")
+    model = RealAI(api_key="sk-testkey123")
+    catalog = model.get_capability_catalog()
+    assert 'capabilities' in catalog
+    assert 'domains' in catalog
+    assert catalog['count'] >= 17
+    provider_caps = model.get_provider_capabilities()
+    assert provider_caps['provider'] == 'openai'
+    assert 'supported_capabilities' in provider_caps
+    assert 'unsupported_capabilities' in provider_caps
+    print("✓ Capability catalog/provider capabilities test passed")
+
+
+def test_persona_profiles_and_chat_metadata():
+    """Test persona switching and canonical response metadata."""
+    print("Testing personas and response metadata...")
+    model = RealAI()
+    personas = model.get_personas()
+    assert 'balanced' in personas
+    model.set_persona("analyst")
+    response = model.chat_completion(messages=[{"role": "user", "content": "Hello"}])
+    assert 'realai_meta' in response
+    assert response['realai_meta']['capability'] == 'text_generation'
+    assert response['realai_meta']['persona'] == 'analyst'
+    print("✓ Personas and response metadata test passed")
 
 
 def test_task_automation():
@@ -571,6 +621,8 @@ def test_orchestrate_agents():
     assert 'agent_results' in response
     assert isinstance(response['agent_results'], dict)
     assert 'final_output' in response
+    assert 'execution_plan' in response
+    assert 'verification' in response
     assert len(response['agent_results']) == 3
     print("✓ Multi-agent orchestration test passed")
 
@@ -608,6 +660,7 @@ def test_new_capabilities_in_model():
     assert 'chain_of_thought' in caps
     assert 'knowledge_synthesis' in caps
     assert 'multi_agent' in caps
+    assert 'video_generation' in caps
     print("✓ Next-gen capabilities in model test passed")
 
 
@@ -619,6 +672,7 @@ def test_new_client_attributes():
     assert hasattr(client, 'synthesis')
     assert hasattr(client, 'reflection')
     assert hasattr(client, 'agents')
+    assert hasattr(client, 'videos')
     print("✓ New client attributes test passed")
 
 
@@ -635,12 +689,15 @@ def run_all_tests():
         test_text_completion,
         test_image_generation,
         test_image_analysis,
+        test_video_generation,
         test_code_generation,
         test_embeddings,
         test_audio_transcription,
         test_audio_generation,
         test_translation,
         test_web_research,
+        test_capability_catalog_and_provider_capabilities,
+        test_persona_profiles_and_chat_metadata,
         test_task_automation,
         test_voice_interaction,
         test_business_planning,

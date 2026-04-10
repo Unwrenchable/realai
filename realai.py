@@ -1205,6 +1205,8 @@ class RealAI:
             Dict[str, Any]: Task execution status and details
         """
         plan_text = f"RealAI has {'executed' if execute else 'planned'} your {task_type} task."
+        results: List[Dict[str, Any]] = []
+
         try:
             ai_result = self.chat_completion([
                 {
@@ -1212,7 +1214,7 @@ class RealAI:
                     "content": (
                         "You are a task automation assistant. "
                         "Break the task into concrete, executable steps. "
-                        "Be concise and practical."
+                        "Number each step. Be concise and practical."
                     )
                 },
                 {
@@ -1235,11 +1237,59 @@ class RealAI:
         except Exception:
             pass  # fall back to static plan_text
 
+        # Attempt web-based execution when requested (uses requests + bs4 if available)
+        if execute:
+            try:
+                import requests as _requests
+                from bs4 import BeautifulSoup as _BS
+
+                _session = _requests.Session()
+                _session.headers.update({"User-Agent": "RealAI/2.0 (+https://github.com/Unwrenchable/realai)"})
+
+                # Parse numbered steps from the plan
+                step_lines = re.findall(r"^\s*\d+[.)]\s*(.+)$", plan_text, re.MULTILINE)
+                if not step_lines:
+                    step_lines = [line.strip() for line in plan_text.splitlines() if line.strip()]
+
+                for step in step_lines[:5]:  # limit to first 5 steps
+                    step_lower = step.lower()
+                    result_entry: Dict[str, Any] = {"step": step, "status": "skipped", "output": ""}
+
+                    # Web search / information-gathering steps
+                    if any(kw in step_lower for kw in ("search", "find", "look up", "check", "browse", "visit", "research")):
+                        # Extract a search query from the step (use the whole step as the query)
+                        try:
+                            r = _session.post(
+                                "https://html.duckduckgo.com/html/",
+                                data={"q": step},
+                                timeout=8,
+                            )
+                            r.raise_for_status()
+                            soup = _BS(r.text, "html.parser")
+                            anchors = soup.find_all("a", attrs={"rel": "nofollow"})
+                            links = [a.get("href") for a in anchors if a.get("href", "").startswith("http")][:3]
+                            result_entry["status"] = "success"
+                            result_entry["output"] = f"Found {len(links)} result(s): {', '.join(links)}"
+                        except Exception as _exc:
+                            result_entry["status"] = "failed"
+                            result_entry["output"] = str(_exc)
+                    else:
+                        result_entry["status"] = "planned"
+                        result_entry["output"] = "Step noted; requires credentials or external service to execute."
+
+                    results.append(result_entry)
+            except ImportError:
+                # requests / bs4 not installed – results stays empty
+                pass
+            except Exception:
+                pass
+
         response = {
             "task_type": task_type,
             "status": "executed" if execute else "planned",
             "details": task_details,
             "plan": plan_text,
+            "results": results,
             "estimated_completion": "5-10 minutes",
             "confirmations": [],
             "success": True
@@ -1275,12 +1325,62 @@ class RealAI:
         input_transcription = None
 
         try:
-            # Step 1: transcribe audio file if provided
+            # Step 1a: transcribe audio file if provided
             if audio_input and os.path.isfile(str(audio_input)):
                 transcription = self.transcribe_audio(audio_input)
                 input_transcription = transcription.get("text", input_text)
                 if input_transcription:
                     input_text = input_transcription
+
+            # Step 1b: record from microphone if no audio file and no text provided
+            elif not input_text:
+                try:
+                    import pyaudio
+                    import wave
+                    import tempfile
+
+                    _CHUNK = 1024
+                    _FORMAT = pyaudio.paInt16
+                    _CHANNELS = 1
+                    _RATE = 16000
+                    _RECORD_SECONDS = 5
+
+                    _pa = pyaudio.PyAudio()
+                    _sample_width = _pa.get_sample_size(_FORMAT)
+                    _stream = _pa.open(
+                        format=_FORMAT,
+                        channels=_CHANNELS,
+                        rate=_RATE,
+                        input=True,
+                        frames_per_buffer=_CHUNK,
+                    )
+                    _frames = []
+                    for _ in range(int(_RATE / _CHUNK * _RECORD_SECONDS)):
+                        _frames.append(_stream.read(_CHUNK, exception_on_overflow=False))
+                    _stream.stop_stream()
+                    _stream.close()
+                    _pa.terminate()
+
+                    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as _tmp:
+                        _wav_path = _tmp.name
+                    with wave.open(_wav_path, "wb") as _wf:
+                        _wf.setnchannels(_CHANNELS)
+                        _wf.setsampwidth(_sample_width)
+                        _wf.setframerate(_RATE)
+                        _wf.writeframes(b"".join(_frames))
+
+                    transcription = self.transcribe_audio(_wav_path)
+                    input_transcription = transcription.get("text", "")
+                    if input_transcription:
+                        input_text = input_transcription
+                        audio_input = _wav_path  # so input_transcription is included in response
+
+                    try:
+                        os.unlink(_wav_path)
+                    except OSError:
+                        pass
+                except ImportError:
+                    pass  # pyaudio not installed — fall through to text-only mode
 
             # Step 2: get AI response
             if input_text:

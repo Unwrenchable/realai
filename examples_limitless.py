@@ -38,7 +38,7 @@ def example_task_automation():
         execute=False  # Set to True to actually execute
     )
     print("\nGrocery Order:")
-    print(json.dumps(groceries, indent=2))
+    print("  Order prepared (set execute=True to place the actual order).")
     
     # Book an appointment
     appointment = client.tasks.book_appointment(
@@ -50,7 +50,7 @@ def example_task_automation():
         execute=False
     )
     print("\nAppointment Booking:")
-    print(json.dumps(appointment, indent=2))
+    print("  Appointment prepared (set execute=True to book).")
 
 
 def example_voice_interaction():

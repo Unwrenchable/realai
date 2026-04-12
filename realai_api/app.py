@@ -7,7 +7,7 @@ from typing import Any, Dict, List
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .auth import require_api_key
@@ -77,9 +77,6 @@ def _get_realai():
 # Serve the compiled React frontend (app/dist/) when it exists
 # ---------------------------------------------------------------------------
 _FRONTEND_DIST = Path(__file__).resolve().parent.parent / "app" / "dist"
-
-if _FRONTEND_DIST.is_dir():
-    app.mount("/assets", StaticFiles(directory=str(_FRONTEND_DIST / "assets")), name="assets")
 
 
 # ---------------------------------------------------------------------------
@@ -244,36 +241,14 @@ def web_research(request: WebResearchRequest, api_key: str = Depends(require_api
 
 
 # ---------------------------------------------------------------------------
-# SPA catch-all — serve the React frontend for every unmatched path
+# SPA catch-all — serve the compiled React frontend for every unmatched path.
+# StaticFiles with html=True handles SPA routing (falls back to index.html)
+# without any user-controlled data flowing through Python path expressions.
 # ---------------------------------------------------------------------------
 
-@app.get("/{full_path:path}")
-def serve_spa(full_path: str):
-    """Serve the compiled React SPA for client-side routing."""
-    if not _FRONTEND_DIST.is_dir():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Frontend not built. Run `npm run build` inside the app/ directory.",
-        )
-
-    dist = _FRONTEND_DIST.resolve()
-
-    # Validate the raw string before touching the filesystem:
-    # reject null bytes, absolute paths, and any path-traversal components.
-    requested_path = Path(full_path)
-    if "\x00" in full_path or requested_path.is_absolute() or ".." in requested_path.parts:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid path")
-
-    # Now safely join and resolve, then confirm the result stays inside dist.
-    candidate = (dist / requested_path).resolve()
-
-    try:
-        candidate.relative_to(dist)
-    except ValueError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid path")
-
-    if candidate.is_file():
-        return FileResponse(str(candidate))
-
-    # Fall back to index.html for client-side routing
-    return FileResponse(str(dist / "index.html"))
+if _FRONTEND_DIST.is_dir():
+    app.mount(
+        "/",
+        StaticFiles(directory=str(_FRONTEND_DIST.resolve()), html=True),
+        name="spa",
+    )

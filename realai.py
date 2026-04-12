@@ -1065,8 +1065,14 @@ class RealAI:
             import wave
 
             # If audio_file is a URL or missing, fall back.
-            # Resolve to a real path first to prevent directory traversal.
-            safe_audio_path = os.path.realpath(audio_file)
+            # Use only the basename to prevent directory traversal, then
+            # resolve within the system temp directory.
+            audio_basename = os.path.basename(audio_file)
+            if not audio_basename:
+                raise FileNotFoundError("Audio file not found for local ASR")
+            safe_audio_path = os.path.join(
+                os.path.realpath(tempfile.gettempdir()), audio_basename
+            )
             if not os.path.isfile(safe_audio_path):
                 raise FileNotFoundError("Audio file not found for local ASR")
 

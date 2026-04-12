@@ -1,0 +1,30 @@
+{
+  "name": "Add Provider Integration",
+  "description": "Workflow for integrating a new AI provider into RealAI.",
+  "steps": [
+    {
+      "agent_id": "realai-repo-architect",
+      "task": "Design the new provider integration: determine the base_url, default_model, api_format, key prefix for _KEY_PREFIX_TO_PROVIDER, and PROVIDER_ENV_VARS entry. Produce a brief ADR."
+    },
+    {
+      "agent_id": "realai-provider-specialist",
+      "task": "Implement the provider integration: add the entry to PROVIDER_CONFIGS and _KEY_PREFIX_TO_PROVIDER in realai.py, add the PROVIDER_ENV_VARS entry, and handle any api_format differences."
+    },
+    {
+      "agent_id": "realai-fullstack-dev",
+      "task": "Update realai_api/providers.py and realai_api/config.py if needed to expose the new provider through the FastAPI server. Verify the /v1/models endpoint lists the provider's models."
+    },
+    {
+      "agent_id": "realai-security-hardener",
+      "task": "Review the new provider integration for key exposure risks, env var naming consistency, and any authentication edge cases."
+    },
+    {
+      "agent_id": "realai-qa-pilot",
+      "task": "Write tests for the new provider: key prefix detection, env var fallback, and provider routing. Run python test_realai.py to confirm all tests pass."
+    },
+    {
+      "agent_id": "realai-documentation-pilot",
+      "task": "Document the new provider in README.md: describe the env var to set, the key prefix format, and an example usage. Update the provider table in API.md."
+    }
+  ]
+}

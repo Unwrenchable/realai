@@ -13,9 +13,13 @@ export function CodeBlock({ code, language = "text", showLineNumbers = false, fi
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API unavailable (non-secure context or permission denied)
+    }
   };
 
   const lines = code.split("\n");

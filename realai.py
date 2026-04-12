@@ -398,7 +398,11 @@ class RealAI:
 
     @staticmethod
     def _parse_json_block(text: str) -> Dict[str, Any]:
-        """Best-effort parser for plain JSON or fenced JSON blocks."""
+        """Best-effort parser for plain JSON or fenced JSON blocks.
+
+        Returns an empty dict when the text cannot be parsed as JSON so that
+        callers can detect "no structured data" without an unhandled exception.
+        """
         cleaned = text.strip()
         if "```" in cleaned:
             parts = cleaned.split("```")
@@ -406,8 +410,11 @@ class RealAI:
                 block = parts[1]
                 first_nl = block.find("\n")
                 cleaned = (block[first_nl + 1:] if first_nl != -1 else block).strip()
-        parsed = json.loads(cleaned)
-        return parsed if isinstance(parsed, dict) else {}
+        try:
+            parsed = json.loads(cleaned)
+            return parsed if isinstance(parsed, dict) else {}
+        except (json.JSONDecodeError, ValueError):
+            return {}
 
     def _call_openai_compat(
         self,
@@ -589,6 +596,8 @@ class RealAI:
                     "Check that your API key is correct and that you have network access."
                 )
                 _prompt_tokens = sum(len(msg.get("content", "").split()) for msg in messages_to_send)
+                # Use finish_reason "error" so callers can detect upstream failures
+                # without having to parse the error message out of content.
                 return self._with_metadata({
                     "id": f"chatcmpl-{int(time.time())}",
                     "object": "chat.completion",
@@ -600,13 +609,14 @@ class RealAI:
                             "role": "assistant",
                             "content": placeholder_content,
                         },
-                        "finish_reason": "stop",
+                        "finish_reason": "error",
                     }],
                     "usage": {
                         "prompt_tokens": _prompt_tokens,
                         "completion_tokens": len(placeholder_content.split()),
                         "total_tokens": _prompt_tokens + len(placeholder_content.split()),
                     },
+                    "error": {"message": _api_error, "type": "upstream_api_error"},
                 }, capability=ModelCapability.TEXT_GENERATION.value, modality="text",
                    extra={"persona": self.persona, "source": "error", "error": _api_error})
 
@@ -954,7 +964,11 @@ class RealAI:
             "explanation": "RealAI has generated code based on your requirements.",
             "confidence": 0.9
         }
-        return response
+        return self._with_metadata(
+            response,
+            capability=ModelCapability.CODE_GENERATION.value,
+            modality="text",
+        )
     
     def create_embeddings(
         self,
@@ -1060,36 +1074,36 @@ class RealAI:
                 # No model available locally; fall back
                 raise RuntimeError("No Vosk model available")
 
-            wf = wave.open(audio_file, "rb")
-            if wf.getnchannels() != 1 or wf.getsampwidth() != 2:
-                # Vosk expects mono 16-bit audio; fall back if not matching
-                raise RuntimeError("Unsupported audio format for Vosk; expected mono 16-bit WAV")
+            with wave.open(audio_file, "rb") as wf:
+                if wf.getnchannels() != 1 or wf.getsampwidth() != 2:
+                    # Vosk expects mono 16-bit audio; fall back if not matching
+                    raise RuntimeError("Unsupported audio format for Vosk; expected mono 16-bit WAV")
 
-            model = Model(model_path)
-            rec = KaldiRecognizer(model, wf.getframerate())
-            results = []
-            while True:
-                data = wf.readframes(4000)
-                if len(data) == 0:
-                    break
-                if rec.AcceptWaveform(data):
-                    results.append(rec.Result())
-            results.append(rec.FinalResult())
-            text_parts = []
-            for r in results:
-                try:
-                    j = json.loads(r)
-                    if "text" in j:
-                        text_parts.append(j["text"])
-                except Exception:
-                    continue
+                model = Model(model_path)
+                rec = KaldiRecognizer(model, wf.getframerate())
+                results = []
+                while True:
+                    data = wf.readframes(4000)
+                    if len(data) == 0:
+                        break
+                    if rec.AcceptWaveform(data):
+                        results.append(rec.Result())
+                results.append(rec.FinalResult())
+                text_parts = []
+                for r in results:
+                    try:
+                        j = json.loads(r)
+                        if "text" in j:
+                            text_parts.append(j["text"])
+                    except Exception:
+                        continue
 
-            return self._with_metadata({
-                "text": " ".join(p for p in text_parts if p),
-                "language": language or "en",
-                "duration": wf.getnframes() / wf.getframerate(),
-                "segments": [],
-            }, capability=ModelCapability.AUDIO_TRANSCRIPTION.value, modality="audio")
+                return self._with_metadata({
+                    "text": " ".join(p for p in text_parts if p),
+                    "language": language or "en",
+                    "duration": wf.getnframes() / wf.getframerate(),
+                    "segments": [],
+                }, capability=ModelCapability.AUDIO_TRANSCRIPTION.value, modality="audio")
 
         except Exception:
             # Fallback stub
@@ -1133,7 +1147,8 @@ class RealAI:
             except Exception:
                 pass
 
-            # Write to temporary file
+            # Write to temporary file.
+            # The caller owns this file and is responsible for deleting it after use.
             with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as f:
                 out_path = f.name
             engine.save_to_file(text, out_path)
@@ -1514,22 +1529,23 @@ class RealAI:
 
                     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as _tmp:
                         _wav_path = _tmp.name
-                    with wave.open(_wav_path, "wb") as _wf:
-                        _wf.setnchannels(_CHANNELS)
-                        _wf.setsampwidth(_sample_width)
-                        _wf.setframerate(_RATE)
-                        _wf.writeframes(b"".join(_frames))
-
-                    transcription = self.transcribe_audio(_wav_path)
-                    input_transcription = transcription.get("text", "")
-                    if input_transcription:
-                        input_text = input_transcription
-                        audio_input = _wav_path  # so input_transcription is included in response
-
                     try:
-                        os.unlink(_wav_path)
-                    except OSError:
-                        pass
+                        with wave.open(_wav_path, "wb") as _wf:
+                            _wf.setnchannels(_CHANNELS)
+                            _wf.setsampwidth(_sample_width)
+                            _wf.setframerate(_RATE)
+                            _wf.writeframes(b"".join(_frames))
+
+                        transcription = self.transcribe_audio(_wav_path)
+                        input_transcription = transcription.get("text", "")
+                        if input_transcription:
+                            input_text = input_transcription
+                            audio_input = _wav_path  # so input_transcription is included in response
+                    finally:
+                        try:
+                            os.unlink(_wav_path)
+                        except OSError:
+                            pass
                 except ImportError:
                     pass  # pyaudio not installed — fall through to text-only mode
 
@@ -1873,14 +1889,23 @@ class RealAI:
         timeout: int = 30
     ) -> Dict[str, Any]:
         """
-        Execute code in a safe environment.
-        
+        Execute code in a locally sandboxed environment.
+
+        .. warning::
+            The sandbox applies CPU-time and virtual-memory limits via
+            ``resource.setrlimit`` only.  It does **not** restrict network
+            access, file-system reads, or access to environment variables.
+            User-supplied code can therefore read process environment variables
+            (which may include API keys) and make outbound network requests.
+            Do **not** run untrusted code with this method unless you add
+            proper OS-level isolation (e.g. Docker, seccomp, nsjail).
+
         Args:
             code (str): Code to execute
             language (str): Programming language
-            sandbox (bool): Whether to execute in sandboxed environment
+            sandbox (bool): Whether to apply CPU/memory resource limits
             timeout (int): Execution timeout in seconds
-            
+
         Returns:
             Dict[str, Any]: Execution results
         """
@@ -2692,7 +2717,12 @@ class RealAIClient:
         def create(self, **kwargs) -> Dict[str, Any]:
             """Create a text completion."""
             prompt = kwargs.pop('prompt', '')
-            return self.model.text_completion(prompt, **kwargs)
+            # Only forward kwargs that text_completion actually accepts; drop the
+            # rest (e.g. model=, stream=, n=, stop=) so callers following OpenAI
+            # client conventions do not get an unexpected-keyword-argument TypeError.
+            temperature = kwargs.pop('temperature', 0.7)
+            max_tokens = kwargs.pop('max_tokens', None)
+            return self.model.text_completion(prompt, temperature=temperature, max_tokens=max_tokens)
     
     class Images:
         """Image generation and analysis interface."""
@@ -2758,10 +2788,11 @@ class RealAIClient:
         
         def order_groceries(self, items: List[str], **kwargs) -> Dict[str, Any]:
             """Order groceries."""
+            execute = kwargs.pop("execute", False)
             return self.model.automate_task(
                 task_type="groceries",
                 task_details={"items": items, **kwargs},
-                execute=kwargs.get("execute", False)
+                execute=execute
             )
         
         def book_appointment(self, details: Dict[str, Any], **kwargs) -> Dict[str, Any]:

@@ -2,8 +2,6 @@ from fastapi import Depends, Header, HTTPException, status
 
 from .config import get_valid_api_keys
 
-_valid_keys = get_valid_api_keys()
-
 
 def require_api_key(authorization: str | None = Header(default=None)) -> str:
     if not authorization:
@@ -13,7 +11,9 @@ def require_api_key(authorization: str | None = Header(default=None)) -> str:
     if scheme.lower() != "bearer" or not token:
         raise _unauthorized("Authorization header must use Bearer scheme")
 
-    if token not in _valid_keys:
+    # Re-read valid keys on every request so that key rotations / revocations
+    # take effect without restarting the process.
+    if token not in get_valid_api_keys():
         raise _unauthorized("Invalid API key")
 
     return token

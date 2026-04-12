@@ -14,6 +14,7 @@ This makes RealAI truly independent and private.
 import os
 import json
 import hashlib
+import threading
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Union
 from enum import Enum
@@ -411,19 +412,24 @@ class LocalLLMEngine:
 # Singleton instances
 _model_manager: Optional[LocalModelManager] = None
 _llm_engine: Optional[LocalLLMEngine] = None
+_singleton_lock = threading.Lock()
 
 
 def get_model_manager() -> LocalModelManager:
-    """Get or create the global model manager instance."""
+    """Get or create the global model manager instance (thread-safe)."""
     global _model_manager
     if _model_manager is None:
-        _model_manager = LocalModelManager()
+        with _singleton_lock:
+            if _model_manager is None:
+                _model_manager = LocalModelManager()
     return _model_manager
 
 
 def get_llm_engine() -> LocalLLMEngine:
-    """Get or create the global LLM engine instance."""
+    """Get or create the global LLM engine instance (thread-safe)."""
     global _llm_engine
     if _llm_engine is None:
-        _llm_engine = LocalLLMEngine(get_model_manager())
+        with _singleton_lock:
+            if _llm_engine is None:
+                _llm_engine = LocalLLMEngine(get_model_manager())
     return _llm_engine

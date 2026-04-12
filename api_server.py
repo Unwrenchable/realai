@@ -505,7 +505,11 @@ class RealAIAPIHandler(BaseHTTPRequestHandler):
 
     def _read_body(self) -> dict:
         """Read and parse JSON body."""
-        content_length = int(self.headers.get('Content-Length', 0))
+        raw_cl = self.headers.get('Content-Length', '0')
+        try:
+            content_length = int(raw_cl)
+        except (ValueError, TypeError):
+            raise ValueError(f"Invalid Content-Length header: {raw_cl!r}")
         body = self.rfile.read(content_length)
         return json.loads(body.decode()) if body else {}
 
@@ -725,6 +729,8 @@ class RealAIAPIHandler(BaseHTTPRequestHandler):
 
         except json.JSONDecodeError:
             self._send_response(400, {"error": "Invalid JSON"})
+        except ValueError as e:
+            self._send_response(400, {"error": str(e)})
         except Exception as e:
             self._send_response(500, {"error": str(e)})
 

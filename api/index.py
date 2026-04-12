@@ -19,33 +19,38 @@ if _root not in sys.path:
     sys.path.insert(0, _root)
 
 # ---------------------------------------------------------------------------
-# Primary: expose the FastAPI ASGI app
+# Fallback: lightweight WSGI stub — defined first so ``app`` is always a
+# top-level name that Vercel's static scanner can find unconditionally.
+# ---------------------------------------------------------------------------
+
+
+def app(environ, start_response):  # type: ignore[misc]
+    """Minimal WSGI fallback when realai_api dependencies are missing."""
+    path = environ.get("PATH_INFO", "/")
+
+    if path == "/health":
+        body = json.dumps({"status": "ok", "version": "0.1.0"}).encode()
+    else:
+        body = json.dumps({
+            "message": "RealAI API is live.",
+            "docs": "/docs",
+            "health": "/health",
+            "models": "/v1/models",
+        }).encode()
+
+    headers = [
+        ("Content-Type", "application/json"),
+        ("Content-Length", str(len(body))),
+    ]
+    start_response("200 OK", headers)
+    return [body]
+
+
+# ---------------------------------------------------------------------------
+# Primary: replace the stub with the real FastAPI ASGI app when available.
 # ---------------------------------------------------------------------------
 
 try:
     from realai_api.app import app  # noqa: F401  (re-exported for Vercel)
 except Exception:
-    # ---------------------------------------------------------------------------
-    # Fallback: lightweight WSGI stub when FastAPI is unavailable
-    # ---------------------------------------------------------------------------
-
-    def app(environ, start_response):  # type: ignore[misc]
-        """Minimal WSGI fallback when realai_api dependencies are missing."""
-        path = environ.get("PATH_INFO", "/")
-
-        if path == "/health":
-            body = json.dumps({"status": "ok", "version": "0.1.0"}).encode()
-        else:
-            body = json.dumps({
-                "message": "RealAI API is live.",
-                "docs": "/docs",
-                "health": "/health",
-                "models": "/v1/models",
-            }).encode()
-
-        headers = [
-            ("Content-Type", "application/json"),
-            ("Content-Length", str(len(body))),
-        ]
-        start_response("200 OK", headers)
-        return [body]
+    pass  # fallback ``app`` defined above remains in effect

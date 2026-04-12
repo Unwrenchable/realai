@@ -2720,8 +2720,8 @@ class RealAIClient:
             # Only forward kwargs that text_completion actually accepts; drop the
             # rest (e.g. model=, stream=, n=, stop=) so callers following OpenAI
             # client conventions do not get an unexpected-keyword-argument TypeError.
-            temperature = kwargs.get('temperature', 0.7)
-            max_tokens = kwargs.get('max_tokens', None)
+            temperature = kwargs.pop('temperature', 0.7)
+            max_tokens = kwargs.pop('max_tokens', None)
             return self.model.text_completion(prompt, temperature=temperature, max_tokens=max_tokens)
     
     class Images:

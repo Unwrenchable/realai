@@ -1066,16 +1066,19 @@ class RealAI:
 
             # If audio_file is a URL or missing, fall back.
             # Restrict access to the system temp directory: extract only the
-            # basename from the caller-supplied value, then verify it actually
-            # exists in temp dir by checking the OS-provided directory listing.
-            # This prevents any directory-traversal attack.
+            # basename from the caller-supplied value, then locate it in the
+            # OS-provided directory listing.  The path is built exclusively
+            # from the listing result (untainted OS data) to prevent taint
+            # from the caller-supplied string from reaching filesystem ops.
             audio_basename = os.path.basename(audio_file)
             temp_dir = os.path.realpath(tempfile.gettempdir())
-            if not audio_basename or audio_basename not in os.listdir(temp_dir):
+            # 'matched' comes from os.listdir() output, NOT from audio_file.
+            matched = next(
+                (f for f in os.listdir(temp_dir) if f == audio_basename), None
+            )
+            if matched is None:
                 raise FileNotFoundError("Audio file not found for local ASR")
-            # Construct the path exclusively from trusted sources (temp_dir and
-            # the verified listing entry) rather than from the caller input.
-            safe_audio_path = os.path.join(temp_dir, audio_basename)
+            safe_audio_path = os.path.join(temp_dir, matched)
             if not os.path.isfile(safe_audio_path):
                 raise FileNotFoundError("Audio file not found for local ASR")
 

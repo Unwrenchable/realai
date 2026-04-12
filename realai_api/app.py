@@ -257,23 +257,20 @@ def serve_spa(full_path: str):
         )
 
     dist = _FRONTEND_DIST.resolve()
+    dist_str = str(dist)
 
-    # Validate the raw string before touching the filesystem:
-    # reject null bytes, absolute paths, and any path-traversal components.
-    requested_path = Path(full_path)
-    if "\x00" in full_path or requested_path.is_absolute() or ".." in requested_path.parts:
+    # Reject null bytes up front.
+    if "\x00" in full_path:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid path")
 
-    # Now safely join and resolve, then confirm the result stays inside dist.
-    candidate = (dist / requested_path).resolve()
-
-    try:
-        candidate.relative_to(dist)
-    except ValueError:
+    # Resolve the candidate to its real, absolute path (follows symlinks) and
+    # immediately confirm it lives inside dist before any filesystem access.
+    candidate = os.path.realpath(os.path.join(dist_str, full_path))
+    if not (candidate.startswith(dist_str + os.sep) or candidate == dist_str):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid path")
 
-    if candidate.is_file():
-        return FileResponse(str(candidate))
+    if os.path.isfile(candidate):
+        return FileResponse(candidate)
 
     # Fall back to index.html for client-side routing
-    return FileResponse(str(dist / "index.html"))
+    return FileResponse(os.path.join(dist_str, "index.html"))

@@ -19,7 +19,9 @@ export function Tooltip({ content, children, placement = "top", delay = 300 }: T
     setVisible(false);
   };
 
-  useEffect(() => () => clearTimeout(timer.current), []);
+  useEffect(() => {
+    return () => clearTimeout(timer.current);
+  });
 
   const placementClasses: Record<string, string> = {
     top: "bottom-full left-1/2 -translate-x-1/2 mb-2",

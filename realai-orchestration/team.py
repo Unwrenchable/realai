@@ -205,7 +205,7 @@ class RealAITeam:
         try:
             workflow = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
-            raise ValueError(f"Invalid JSON in workflow file: {exc}") from exc
+            raise ValueError(f"Invalid JSON in workflow file '{workflow_path}': {exc}") from exc
 
         steps = workflow.get("steps")
         if not isinstance(steps, list) or not steps:
@@ -226,12 +226,12 @@ class RealAITeam:
             if aid:
                 tasks[aid] = task
 
-        orch = cls.build(realai_client, agent_ids=agent_ids, memory=memory)
+        orch = cls.build(realai_client, agent_ids=agent_ids if agent_ids else None, memory=memory)
 
         # Run agents in workflow step order
         ordered = [s["agent_id"] for s in steps if isinstance(s, dict) and "agent_id" in s]
 
-        # Seed the first task from the workflow
+        # Seed the first task from the workflow (safe: 'steps' is non-empty per check above)
         first_task = tasks.get(ordered[0], "") if ordered else ""
 
         # Use run_pipeline with an ordered agent list; the first task seeds it

@@ -15,9 +15,7 @@ class ChatCompletionRequest(BaseModel):
     temperature: Optional[float] = None
     stream: Optional[bool] = False
 
-    class Config:
-        allow_population_by_field_name = True
-        extra = "ignore"
+    model_config = {"populate_by_name": True, "extra": "ignore"}
 
 
 class ImageGenerationRequest(BaseModel):
@@ -27,8 +25,7 @@ class ImageGenerationRequest(BaseModel):
     n: Optional[int] = 1
     size: Optional[str] = "1024x1024"
 
-    class Config:
-        extra = "ignore"
+    model_config = {"extra": "ignore"}
 
 
 class EmbeddingsRequest(BaseModel):
@@ -37,8 +34,7 @@ class EmbeddingsRequest(BaseModel):
     input: Union[str, List[str]]
     model: Optional[str] = None
 
-    class Config:
-        extra = "ignore"
+    model_config = {"extra": "ignore"}
 
 
 class AudioTranscriptionRequest(BaseModel):
@@ -47,8 +43,7 @@ class AudioTranscriptionRequest(BaseModel):
     audio_path: str
     language: Optional[str] = None
 
-    class Config:
-        extra = "ignore"
+    model_config = {"extra": "ignore"}
 
 
 class AudioSpeechRequest(BaseModel):
@@ -58,8 +53,7 @@ class AudioSpeechRequest(BaseModel):
     voice: Optional[str] = "alloy"
     model: Optional[str] = None
 
-    class Config:
-        extra = "ignore"
+    model_config = {"extra": "ignore"}
 
 
 class CodeGenerationRequest(BaseModel):
@@ -68,8 +62,7 @@ class CodeGenerationRequest(BaseModel):
     prompt: str
     language: Optional[str] = "python"
 
-    class Config:
-        extra = "ignore"
+    model_config = {"extra": "ignore"}
 
 
 class TranslationRequest(BaseModel):
@@ -78,8 +71,7 @@ class TranslationRequest(BaseModel):
     text: str
     target_language: str
 
-    class Config:
-        extra = "ignore"
+    model_config = {"extra": "ignore"}
 
 
 class WebResearchRequest(BaseModel):
@@ -87,8 +79,7 @@ class WebResearchRequest(BaseModel):
 
     query: str
 
-    class Config:
-        extra = "ignore"
+    model_config = {"extra": "ignore"}
 
 
 class CodeExecutionRequest(BaseModel):
@@ -97,8 +88,7 @@ class CodeExecutionRequest(BaseModel):
     code: str
     language: Optional[str] = "python"
 
-    class Config:
-        extra = "ignore"
+    model_config = {"extra": "ignore"}
 
 
 class CapabilityInfo(BaseModel):

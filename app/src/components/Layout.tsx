@@ -23,11 +23,11 @@ interface LayoutProps {
 
 export default function Layout({ activePanel, onNavigate, children }: LayoutProps) {
   const [showSettings, setShowSettings] = useState(false)
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('realai_api_key') ?? 'realai-demo')
+  const [apiKey, setApiKey] = useState(() => sessionStorage.getItem('realai_api_key') ?? 'realai-demo')
   const [draftKey, setDraftKey] = useState(apiKey)
 
   function saveKey() {
-    localStorage.setItem('realai_api_key', draftKey)
+    sessionStorage.setItem('realai_api_key', draftKey)
     setApiKey(draftKey)
     setShowSettings(false)
   }
@@ -80,6 +80,7 @@ export default function Layout({ activePanel, onNavigate, children }: LayoutProp
             <p className="hint">
               Default keys: <code>realai-demo</code> / <code>realai-dev</code>.
               Set <code>REALAI_API_KEYS</code> on the server to restrict access.
+              Your key is stored in sessionStorage (cleared when you close the tab).
             </p>
             <div className="modal-actions">
               <button className="btn-secondary" onClick={() => setShowSettings(false)}>Cancel</button>

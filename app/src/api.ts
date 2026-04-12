@@ -5,11 +5,10 @@
  * development the Vite dev server proxies /v1/* to http://localhost:8000.
  */
 
-const BASE_URL = (import.meta as unknown as { env: Record<string, string> }).env
-  ?.VITE_API_BASE_URL ?? ''
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 
 function getApiKey(): string {
-  return localStorage.getItem('realai_api_key') ?? 'realai-demo'
+  return sessionStorage.getItem('realai_api_key') ?? 'realai-demo'
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {

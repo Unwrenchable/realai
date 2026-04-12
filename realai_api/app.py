@@ -256,13 +256,13 @@ def serve_spa(full_path: str):
             detail="Frontend not built. Run `npm run build` inside the app/ directory.",
         )
 
-    # Resolve the requested path safely (no traversal outside dist)
     dist = _FRONTEND_DIST.resolve()
-    # Strip leading slashes and any traversal components
-    safe_rel = Path(*[p for p in Path(full_path).parts if p not in ("", "..", ".")])
-    candidate = (dist / safe_rel).resolve()
 
-    # Reject anything that resolves outside of dist
+    # Safely join the path — let Path.resolve() canonicalise symlinks, then
+    # verify the result sits inside dist.  This handles all traversal forms
+    # (../foo, ./foo, encoded %2e%2e, etc.) without manual part filtering.
+    candidate = (dist / full_path).resolve()
+
     try:
         candidate.relative_to(dist)
     except ValueError:

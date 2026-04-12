@@ -18,10 +18,13 @@ Example::
 """
 
 import json
+import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -158,11 +161,13 @@ class AgentRegistry:
 
         try:
             raw = json.loads(path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
+        except (json.JSONDecodeError, OSError) as exc:
+            logger.warning("AgentRegistry: failed to load '%s': %s", path, exc)
             self._agents = {}
             return self._agents
 
         if not isinstance(raw, list):
+            logger.warning("AgentRegistry: '%s' must contain a JSON array, got %s", path, type(raw).__name__)
             self._agents = {}
             return self._agents
 

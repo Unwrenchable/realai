@@ -580,13 +580,37 @@ class RealAI:
                     modality="text",
                     extra={"persona": self.persona, "source": "api"},
                 )
-            except Exception:
-                # Broad catch is intentional: we want to fall back gracefully
-                # for network errors, auth failures, missing `requests` package,
-                # etc., so the client remains functional without live credentials.
-                pass
+            except Exception as e:
+                # Log the error so operators can diagnose key/network problems.
+                print(f"[RealAI] API call failed ({self.provider}): {e}")
+                _api_error = str(e)
+                placeholder_content = (
+                    f"API call to {self.provider} failed: {_api_error}. "
+                    "Check that your API key is correct and that you have network access."
+                )
+                _prompt_tokens = sum(len(msg.get("content", "").split()) for msg in messages_to_send)
+                return self._with_metadata({
+                    "id": f"chatcmpl-{int(time.time())}",
+                    "object": "chat.completion",
+                    "created": int(time.time()),
+                    "model": self.model_name,
+                    "choices": [{
+                        "index": 0,
+                        "message": {
+                            "role": "assistant",
+                            "content": placeholder_content,
+                        },
+                        "finish_reason": "stop",
+                    }],
+                    "usage": {
+                        "prompt_tokens": _prompt_tokens,
+                        "completion_tokens": len(placeholder_content.split()),
+                        "total_tokens": _prompt_tokens + len(placeholder_content.split()),
+                    },
+                }, capability=ModelCapability.TEXT_GENERATION.value, modality="text",
+                   extra={"persona": self.persona, "source": "error", "error": _api_error})
 
-        # Placeholder response (no provider configured or call failed).
+        # Placeholder response (no provider configured).
         return self._with_metadata({
             "id": f"chatcmpl-{int(time.time())}",
             "object": "chat.completion",
@@ -596,7 +620,7 @@ class RealAI:
                 "index": 0,
                 "message": {
                     "role": "assistant",
-                    "content": "I am RealAI, the model that can do it all. I understand your message and am ready to help!"
+                    "content": "No API key configured. Paste your provider API key in the settings bar above to connect to a real AI model."
                 },
                 "finish_reason": "stop"
             }],
@@ -690,10 +714,28 @@ class RealAI:
                     "choices": [{"text": text, "index": 0, "finish_reason": "stop"}],
                     "usage": usage,
                 }, capability=ModelCapability.TEXT_GENERATION.value, modality="text", extra={"persona": self.persona, "source": "api"})
-            except Exception:
-                # Broad catch is intentional: fall back gracefully for network
-                # errors, auth failures, or missing dependencies.
-                pass
+            except Exception as e:
+                # Log the error so operators can diagnose key/network problems.
+                print(f"[RealAI] API call failed ({self.provider}): {e}")
+                _api_error = str(e)
+                error_text = (
+                    f"API call to {self.provider} failed: {_api_error}. "
+                    "Check that your API key is correct and that you have network access."
+                )
+                _prompt_tokens = len(prompt.split())
+                return self._with_metadata({
+                    "id": f"cmpl-{int(time.time())}",
+                    "object": "text_completion",
+                    "created": int(time.time()),
+                    "model": self.model_name,
+                    "choices": [{"text": error_text, "index": 0, "finish_reason": "stop"}],
+                    "usage": {
+                        "prompt_tokens": _prompt_tokens,
+                        "completion_tokens": len(error_text.split()),
+                        "total_tokens": _prompt_tokens + len(error_text.split()),
+                    },
+                }, capability=ModelCapability.TEXT_GENERATION.value, modality="text",
+                   extra={"persona": self.persona, "source": "error", "error": _api_error})
 
         return self._with_metadata({
             "id": f"cmpl-{int(time.time())}",
@@ -701,7 +743,7 @@ class RealAI:
             "created": int(time.time()),
             "model": self.model_name,
             "choices": [{
-                "text": "This is a RealAI completion. The model understands and can respond to your prompt.",
+                "text": "No API key configured. Paste your provider API key in the settings bar above to connect to a real AI model.",
                 "index": 0,
                 "finish_reason": "stop"
             }],

@@ -258,10 +258,14 @@ def serve_spa(full_path: str):
 
     dist = _FRONTEND_DIST.resolve()
 
-    # Safely join the path — let Path.resolve() canonicalise symlinks, then
-    # verify the result sits inside dist.  This handles all traversal forms
-    # (../foo, ./foo, encoded %2e%2e, etc.) without manual part filtering.
-    candidate = (dist / full_path).resolve()
+    # Validate the raw string before touching the filesystem:
+    # reject null bytes, absolute paths, and any path-traversal components.
+    requested_path = Path(full_path)
+    if "\x00" in full_path or requested_path.is_absolute() or ".." in requested_path.parts:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid path")
+
+    # Now safely join and resolve, then confirm the result stays inside dist.
+    candidate = (dist / requested_path).resolve()
 
     try:
         candidate.relative_to(dist)

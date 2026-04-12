@@ -1,5 +1,7 @@
 import { readConfig } from "../config";
 
+const SERVER_FETCH_TIMEOUT_MS = 3000;
+
 const PROVIDER_MODELS: Record<string, string[]> = {
   openai: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
   anthropic: [
@@ -31,7 +33,7 @@ const PROVIDER_MODELS: Record<string, string[]> = {
 
 async function fetchModelsFromServer(baseUrl: string): Promise<string[] | null> {
   try {
-    const res = await fetch(`${baseUrl}/v1/models`, { signal: AbortSignal.timeout(3000) });
+    const res = await fetch(`${baseUrl}/v1/models`, { signal: AbortSignal.timeout(SERVER_FETCH_TIMEOUT_MS) });
     if (!res.ok) return null;
     const data = (await res.json()) as { data?: Array<{ id: string }> };
     return data.data?.map((m) => m.id) ?? null;

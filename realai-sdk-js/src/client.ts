@@ -87,7 +87,6 @@ export class RealAIClient {
         signal: controller.signal,
       });
     } catch (err) {
-      clearTimeout(timer);
       const msg = err instanceof Error ? err.message : String(err);
       throw new RealAIError(`Network error: ${msg}`);
     } finally {

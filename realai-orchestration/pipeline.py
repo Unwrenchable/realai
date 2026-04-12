@@ -50,7 +50,7 @@ class Pipeline:
     Example::
 
         def first_task(_):
-            return "Summarise the latest AI news."
+            return "Summarize the latest AI news."
 
         def second_task(prev_output):
             return f"Translate to French: {prev_output}"

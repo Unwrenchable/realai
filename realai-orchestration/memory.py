@@ -27,7 +27,7 @@ class SharedMemory:
 
         Args:
             key: Identifier for the stored value.
-            value: Any serialisable Python object.
+            value: Any serializable Python object.
         """
         with self._lock:
             self._store[key] = value

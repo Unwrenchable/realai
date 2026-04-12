@@ -9,18 +9,18 @@ export interface TooltipProps {
 
 export function Tooltip({ content, children, placement = "top", delay = 300 }: TooltipProps) {
   const [visible, setVisible] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout>>();
+  const timeoutId = useRef<ReturnType<typeof setTimeout>>();
 
   const show = () => {
-    timer.current = setTimeout(() => setVisible(true), delay);
+    timeoutId.current = setTimeout(() => setVisible(true), delay);
   };
   const hide = () => {
-    clearTimeout(timer.current);
+    clearTimeout(timeoutId.current);
     setVisible(false);
   };
 
   useEffect(() => {
-    return () => clearTimeout(timer.current);
+    return () => clearTimeout(timeoutId.current);
   }, []);
 
   const placementClasses: Record<string, string> = {

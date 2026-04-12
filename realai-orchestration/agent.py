@@ -30,8 +30,8 @@ class BaseAgent:
 
         client = RealAIClient()
         agent = BaseAgent(
-            name="summariser",
-            role="You are an expert summariser. Summarise the given text concisely.",
+            name="summarizer",
+            role="You are an expert summarizer. Summarize the given text concisely.",
             realai_client=client,
         )
         result = agent.run("Summarise the history of AI.")

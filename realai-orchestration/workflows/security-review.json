@@ -1,0 +1,30 @@
+{
+  "name": "Full Security Review",
+  "description": "Comprehensive security audit and hardening workflow for the RealAI codebase.",
+  "steps": [
+    {
+      "agent_id": "realai-repo-architect",
+      "task": "Survey the attack surface: list all authenticated and unauthenticated endpoints, identify data flows that touch external AI providers, and note any cross-origin concerns."
+    },
+    {
+      "agent_id": "realai-security-hardener",
+      "task": "Audit the full codebase for: API key exposure, path traversal in the SPA catch-all, CORS misconfiguration, prompt injection vectors in agent pipelines, code execution sandboxing, and dependency vulnerabilities. Produce a prioritised finding list."
+    },
+    {
+      "agent_id": "realai-fullstack-dev",
+      "task": "Apply remediations for API-layer findings: tighten input validation, fix any authentication gaps, and harden CORS configuration."
+    },
+    {
+      "agent_id": "realai-capability-dev",
+      "task": "Apply remediations for core-capability findings: sanitise inputs to execute_code, web_research, and any external-call methods. Ensure all external calls use the configured provider key, not a hard-coded default."
+    },
+    {
+      "agent_id": "realai-qa-pilot",
+      "task": "Write regression tests for each security finding to prevent reintroduction. Run python test_realai.py to confirm all tests pass."
+    },
+    {
+      "agent_id": "realai-documentation-pilot",
+      "task": "Update SECURITY_SUMMARY.txt and CONTRIBUTING.md to reflect the mitigations applied and any new security policies."
+    }
+  ]
+}

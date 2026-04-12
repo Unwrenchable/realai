@@ -44,13 +44,18 @@ from .agent import BaseAgent
 from .memory import SharedMemory
 from .orchestrator import Orchestrator
 from .pipeline import Pipeline
+from .registry import AgentDefinition, AgentRegistry
+from .team import RealAITeam
 from .tools import Tool, ToolRegistry
 
 __all__ = [
+    "AgentDefinition",
+    "AgentRegistry",
     "BaseAgent",
     "Orchestrator",
-    "SharedMemory",
     "Pipeline",
+    "RealAITeam",
+    "SharedMemory",
     "Tool",
     "ToolRegistry",
 ]

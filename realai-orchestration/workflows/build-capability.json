@@ -1,0 +1,34 @@
+{
+  "name": "Build New Capability",
+  "description": "End-to-end workflow for designing, implementing, testing, and documenting a new RealAI capability.",
+  "steps": [
+    {
+      "agent_id": "realai-repo-architect",
+      "task": "Design the architecture for the new capability: define the realai.py method signature, required provider delegation pattern, FastAPI endpoint contract, and any schema changes needed in realai_api/schemas.py."
+    },
+    {
+      "agent_id": "realai-capability-dev",
+      "task": "Implement the new capability method in realai.py following the stub-with-graceful-fallback pattern. Wire it to the appropriate provider using PROVIDER_CONFIGS."
+    },
+    {
+      "agent_id": "realai-fullstack-dev",
+      "task": "Add the FastAPI endpoint and Pydantic schema for the new capability in realai_api/app.py and realai_api/schemas.py. Ensure it delegates to the RealAI core."
+    },
+    {
+      "agent_id": "realai-fullstack-dev",
+      "task": "Add a new panel or extend an existing panel in app/src/components/ to expose the new capability to users via the React frontend."
+    },
+    {
+      "agent_id": "realai-security-hardener",
+      "task": "Review the new capability implementation for security issues: input validation, injection risks, sandboxing requirements, and authentication coverage."
+    },
+    {
+      "agent_id": "realai-qa-pilot",
+      "task": "Write plain-assert tests in test_realai.py covering the new capability method, its FastAPI endpoint, and error/fallback paths. Run python test_realai.py to confirm all tests pass."
+    },
+    {
+      "agent_id": "realai-documentation-pilot",
+      "task": "Document the new capability in README.md and API.md. Add a runnable example to examples.py. Update the /v1/capabilities description if needed."
+    }
+  ]
+}

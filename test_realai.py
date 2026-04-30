@@ -184,7 +184,7 @@ def test_model_capabilities():
     print("Testing model capabilities...")
     model = RealAI()
     capabilities = model.get_capabilities()
-    assert len(capabilities) >= 17
+    assert len(capabilities) >= 44
     assert 'text_generation' in capabilities
     assert 'image_generation' in capabilities
     assert 'video_generation' in capabilities

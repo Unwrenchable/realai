@@ -325,6 +325,37 @@ def test_web3_integration():
     print("✓ Web3 integration test passed")
 
 
+def test_web3_gpg_signing():
+    """Test Web3 GPG signing capability."""
+    print("Testing Web3 GPG signing...")
+    client = RealAIClient()
+    # Test with a fake provider URL to trigger real Web3 code path
+    import os
+    old_provider = os.environ.get('WEB3_PROVIDER_URL')
+    os.environ['WEB3_PROVIDER_URL'] = 'https://fake-provider.com'
+    
+    try:
+        response = client.web3.execute(
+            operation="transaction",
+            blockchain="ethereum",
+            sign_with_gpg=True,
+            transaction_data="test transaction data",
+            gpg_keyid="test@example.com"
+        )
+        assert 'operation' in response
+        assert 'blockchain' in response
+        assert 'status' in response
+        # Should have error about GPG signing (since no real GPG key exists)
+        assert 'error' in response and 'GPG signing failed' in response['error']
+        print("✓ Web3 GPG signing test passed")
+    finally:
+        # Restore original environment
+        if old_provider:
+            os.environ['WEB3_PROVIDER_URL'] = old_provider
+        elif 'WEB3_PROVIDER_URL' in os.environ:
+            del os.environ['WEB3_PROVIDER_URL']
+
+
 def test_code_execution():
     """Test code execution capability."""
     print("Testing code execution...")
@@ -703,6 +734,7 @@ def run_all_tests():
         test_business_planning,
         test_therapy_counseling,
         test_web3_integration,
+        test_web3_gpg_signing,
         test_code_execution,
         test_plugin_system,
         test_memory_learning,

@@ -11,6 +11,7 @@ uvicorn>=0.23.0
 #   pip install pyttsx3>=2.90                 # text-to-speech
 #   pip install vosk>=0.3.45                  # speech recognition (~1-2 GB)
 #   pip install web3>=6.0.0                   # blockchain / Web3 integration
+#   pip install python-gnupg>=0.5.0            # GPG signing for Web3 transactions
 
 # Local AI Models (Your Own AI - No External APIs Required!)
 # Uncomment the packages below to enable local model inference:

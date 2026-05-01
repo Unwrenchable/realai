@@ -298,6 +298,14 @@
       },
       "patterns": [],
       "adaptations": []
+    },
+    {
+      "timestamp": 1777632937,
+      "data": {
+        "test": "data"
+      },
+      "patterns": [],
+      "adaptations": []
     }
   ],
   "patterns": {

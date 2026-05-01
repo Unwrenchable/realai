@@ -329,7 +329,7 @@ def test_web3_gpg_signing():
     """Test Web3 GPG signing capability."""
     print("Testing Web3 GPG signing...")
     client = RealAIClient()
-    # Test GPG signing without requiring a live Web3 provider (uses fallback)
+    # Test GPG signing without requiring a live Web3 provider.
     response = client.web3.execute(
         operation="transaction",
         blockchain="ethereum",
@@ -340,8 +340,11 @@ def test_web3_gpg_signing():
     assert 'operation' in response
     assert 'blockchain' in response
     assert 'status' in response
-    # Should have fallback response since no provider URL is set
-    assert 'result' in response and 'processed your Web3 operation' in response['result']
+    assert 'result' not in response
+    assert (
+        response.get('signature_status') == 'signed_with_gpg'
+        or 'error' in response
+    )
     print("✓ Web3 GPG signing test passed")
 
 

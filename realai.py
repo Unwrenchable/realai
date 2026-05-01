@@ -3500,6 +3500,36 @@ class RealAI:
             "timestamp": int(time.time())
         }
 
+        if operation == "transaction" and sign_with_gpg:
+            result = {
+                "operation": operation,
+                "blockchain": blockchain,
+                "status": "success",
+                "network": blockchain,
+                "timestamp": int(time.time())
+            }
+
+            try:
+                import gnupg
+                gpg = gnupg.GPG()
+
+                if not transaction_data:
+                    result["error"] = "No transaction data provided for signing"
+                else:
+                    signed_data = gpg.sign(transaction_data, keyid=gpg_keyid)
+                    if signed_data:
+                        result["signed_transaction"] = str(signed_data)
+                        result["signature_status"] = "signed_with_gpg"
+                        result["gpg_fingerprint"] = gpg_keyid
+                    else:
+                        result["error"] = "GPG signing failed - check if GPG key exists"
+            except ImportError:
+                result["error"] = "python-gnupg not installed for GPG signing"
+            except Exception as e:
+                result["error"] = f"GPG signing error: {str(e)}"
+
+            return result
+
         if not provider_url:
             return fallback
 
@@ -3516,31 +3546,6 @@ class RealAI:
                 "network": blockchain,
                 "timestamp": int(time.time())
             }
-
-            if operation == "transaction" and sign_with_gpg:
-                # Handle transaction signing with GPG if requested (doesn't require live provider)
-                try:
-                    import gnupg
-                    gpg = gnupg.GPG()
-                    
-                    # Get transaction data to sign
-                    tx_data = transaction_data
-                    if not tx_data:
-                        result["error"] = "No transaction data provided for signing"
-                    else:
-                        # Sign the transaction data with GPG
-                        signed_data = gpg.sign(tx_data, keyid=gpg_keyid)
-                        if signed_data:
-                            result["signed_transaction"] = str(signed_data)
-                            result["signature_status"] = "signed_with_gpg"
-                            result["gpg_fingerprint"] = gpg_keyid
-                        else:
-                            result["error"] = "GPG signing failed - check if GPG key exists"
-                except ImportError:
-                    result["error"] = "python-gnupg not installed for GPG signing"
-                except Exception as e:
-                    result["error"] = f"GPG signing error: {str(e)}"
-                return result
 
             if not provider_connected:
                 result["error"] = "Web3 provider not connected"

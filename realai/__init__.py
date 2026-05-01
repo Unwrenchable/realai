@@ -67,7 +67,10 @@ except Exception:
     resource = None
 
 try:
-    from .local_models import get_model_manager, get_llm_engine
+    try:
+        from .local_models import get_model_manager, get_llm_engine
+    except ImportError:
+        from local_models import get_model_manager, get_llm_engine
     LOCAL_MODELS_AVAILABLE = True
 except Exception:
     LOCAL_MODELS_AVAILABLE = False

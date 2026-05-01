@@ -4,7 +4,7 @@ RealAI API Server
 A simple HTTP server that provides an OpenAI-compatible REST API.
 This allows you to use RealAI with any OpenAI-compatible client libraries.
 
-Run with: python api_server.py
+Run with: python -m realai.api_server
 
 API Key handling
 ----------------

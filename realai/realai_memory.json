@@ -7,6 +7,14 @@
       },
       "patterns": [],
       "adaptations": []
+    },
+    {
+      "timestamp": 1777634797,
+      "data": {
+        "test": "data"
+      },
+      "patterns": [],
+      "adaptations": []
     }
   ],
   "patterns": {},

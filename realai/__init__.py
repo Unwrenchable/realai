@@ -2650,8 +2650,14 @@ class RealAI:
             from vosk import Model, KaldiRecognizer
             import wave
 
+            # Normalise the path to prevent path traversal attacks before any
+            # filesystem access.  Only local file paths are supported here; if
+            # the value looks like a URL (http/https) it will fail the isfile
+            # check below and we fall through to the cloud fallback.
+            safe_audio_file = os.path.realpath(os.path.abspath(audio_file))
+
             # If audio_file is a URL or missing, fall back
-            if not os.path.exists(audio_file):
+            if not os.path.isfile(safe_audio_file):
                 raise FileNotFoundError("Audio file not found for local ASR")
 
             # Try to find a small model in environment variable VOSK_MODEL_PATH
@@ -2660,7 +2666,7 @@ class RealAI:
                 # No model available locally; fall back
                 raise RuntimeError("No Vosk model available")
 
-            with wave.open(audio_file, "rb") as wf:
+            with wave.open(safe_audio_file, "rb") as wf:
                 if wf.getnchannels() != 1 or wf.getsampwidth() != 2:
                     # Vosk expects mono 16-bit audio; fall back if not matching
                     raise RuntimeError("Unsupported audio format for Vosk; expected mono 16-bit WAV")

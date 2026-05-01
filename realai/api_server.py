@@ -20,7 +20,7 @@ import os
 import sqlite3
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
-from . import RealAI, PROVIDER_CONFIGS, PROVIDER_ENV_VARS
+from . import RealAI, PROVIDER_CONFIGS, PROVIDER_ENV_VARS, _KEY_PREFIX_TO_PROVIDER
 
 # ---------------------------------------------------------------------------
 # Database helpers
@@ -269,6 +269,7 @@ header {
   <button class="btn btn-sm btn-primary" onclick="saveKey()">Save key</button>
   <button class="btn btn-sm btn-secondary" onclick="clearKey()">Clear</button>
 </div>
+<div id="provider-hint" style="display:none;background:#3a1a1a;color:#ef9a9a;font-size:0.8rem;padding:6px 20px;border-bottom:1px solid var(--border)"></div>
 
 <div id="chat-messages">
   <div id="welcome">
@@ -358,8 +359,42 @@ function onSettingChange() {
   localStorage.setItem(MODEL_STORE,    document.getElementById('model-select').value);
 }
 
+// Mirrors the server-side _KEY_PREFIX_TO_PROVIDER map.
+function detectProvider(key) {
+  if (!key) return null;
+  if (key.startsWith('sk-ant-'))   return 'anthropic';
+  if (key.startsWith('sk-or-v1-')) return 'openrouter';
+  if (key.startsWith('sk-proj-'))  return 'openai';
+  if (key.startsWith('sk-'))       return 'openai';
+  if (key.startsWith('xai-'))      return 'grok';
+  if (key.startsWith('AIza'))      return 'gemini';
+  if (key.startsWith('pplx-'))     return 'perplexity';
+  return null;
+}
+
 function onKeyInput() {
-  updateKeyStatus(document.getElementById('api-key-input').value);
+  var key = document.getElementById('api-key-input').value;
+  updateKeyStatus(key);
+  // Auto-select provider when the key prefix is recognizable.
+  var detected = detectProvider(key);
+  var select = document.getElementById('provider-select');
+  if (detected) {
+    select.value = detected;
+    localStorage.setItem(PROVIDER_STORE, detected);
+    showProviderHint('');
+  } else if (key && key.trim()) {
+    // Key is present but prefix is not recognized — prompt the user.
+    showProviderHint('\\u26A0\\uFE0F Key not recognized — please select your provider from the dropdown above.');
+  } else {
+    showProviderHint('');
+  }
+}
+
+function showProviderHint(msg) {
+  var el = document.getElementById('provider-hint');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.display = msg ? 'block' : 'none';
 }
 
 function saveKey() {
@@ -384,6 +419,7 @@ function clearKey() {
   localStorage.removeItem(KEY_STORE);
   document.getElementById('api-key-input').value = '';
   updateKeyStatus('');
+  showProviderHint('');
   toast('API key cleared');
 }
 
@@ -722,6 +758,33 @@ class RealAIAPIHandler(BaseHTTPRequestHandler):
             # the API key and X-Provider header; if no key is supplied the
             # response falls back to RealAI's placeholder regardless of model.
             model_name = body.get('model', 'realai-2.0')
+
+            # When the caller provides a Bearer token but no explicit
+            # X-Provider, attempt prefix-based detection.  If no prefix
+            # matches, return a clear 400 so the caller knows to pick a
+            # provider explicitly (e.g. via the web-UI dropdown or the
+            # X-Provider header) rather than silently receiving placeholder
+            # responses.
+            _auth_header = self.headers.get("Authorization", "")
+            _bearer_key = (
+                _auth_header[len("Bearer "):].strip()
+                if _auth_header.startswith("Bearer ")
+                else None
+            )
+            if _bearer_key and not (self.headers.get("X-Provider") or None):
+                _detected = any(
+                    _bearer_key.startswith(p)
+                    for p in _KEY_PREFIX_TO_PROVIDER
+                )
+                if not _detected:
+                    raise ValueError(
+                        "Cannot auto-detect provider from your API key. "
+                        "Please select a provider using the Provider dropdown "
+                        "in the web UI, or add an X-Provider header "
+                        "(openai, anthropic, grok, gemini, openrouter, "
+                        "mistral, together, deepseek, perplexity)."
+                    )
+
             model = self._get_model(model_name=model_name)
 
             if parsed_path.path == '/v1/chat/completions':

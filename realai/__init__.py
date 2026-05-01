@@ -67,7 +67,10 @@ except Exception:
     resource = None
 
 try:
-    from .local_models import get_model_manager, get_llm_engine
+    try:
+        from .local_models import get_model_manager, get_llm_engine
+    except ImportError:
+        from local_models import get_model_manager, get_llm_engine
     LOCAL_MODELS_AVAILABLE = True
 except Exception:
     LOCAL_MODELS_AVAILABLE = False
@@ -2647,8 +2650,25 @@ class RealAI:
             from vosk import Model, KaldiRecognizer
             import wave
 
+            # Normalise the path to prevent path traversal attacks before any
+            # filesystem access.  Only local file paths are supported here; if
+            # the value looks like a URL (http/https) it will fail the isfile
+            # check below and we fall through to the cloud fallback.
+            safe_audio_file = os.path.realpath(os.path.abspath(audio_file))
+
+            # Enforce an allowlist of recognised audio extensions so that
+            # user-supplied paths cannot be used to read arbitrary files
+            # (e.g. /etc/passwd or other sensitive paths on the server).
+            _ALLOWED_AUDIO_EXT = {'.wav', '.mp3', '.flac', '.ogg', '.m4a', '.mp4', '.webm', '.aac'}
+            _ext = os.path.splitext(safe_audio_file)[1].lower()
+            if _ext not in _ALLOWED_AUDIO_EXT:
+                raise ValueError(
+                    f"Unsupported audio file extension {_ext!r}. "
+                    f"Allowed: {', '.join(sorted(_ALLOWED_AUDIO_EXT))}"
+                )
+
             # If audio_file is a URL or missing, fall back
-            if not os.path.exists(audio_file):
+            if not os.path.isfile(safe_audio_file):
                 raise FileNotFoundError("Audio file not found for local ASR")
 
             # Try to find a small model in environment variable VOSK_MODEL_PATH
@@ -2657,7 +2677,7 @@ class RealAI:
                 # No model available locally; fall back
                 raise RuntimeError("No Vosk model available")
 
-            with wave.open(audio_file, "rb") as wf:
+            with wave.open(safe_audio_file, "rb") as wf:
                 if wf.getnchannels() != 1 or wf.getsampwidth() != 2:
                     # Vosk expects mono 16-bit audio; fall back if not matching
                     raise RuntimeError("Unsupported audio format for Vosk; expected mono 16-bit WAV")

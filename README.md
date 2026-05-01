@@ -587,6 +587,8 @@ export REALAI_OPENAI_API_KEY=sk-...            # OpenAI
 # export REALAI_PERPLEXITY_API_KEY=pplx-...   # Perplexity AI
 
 # Start the server (default: port 8000, all interfaces)
+python -m realai.api_server
+# or (legacy, still works)
 python api_server.py
 ```
 
@@ -728,7 +730,8 @@ git clone https://github.com/Unwrenchable/realai.git
 cd realai
 pip install -e .
 export REALAI_OPENAI_API_KEY=sk-...
-python api_server.py
+python -m realai.api_server
+# or: python api_server.py
 ```
 
 **AWS Lambda (Serverless):**

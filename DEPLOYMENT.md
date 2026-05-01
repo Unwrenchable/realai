@@ -176,10 +176,12 @@ Quick setup for local development or testing.
 export REALAI_OPENAI_API_KEY=sk-...
 
 # Start the server (default port 8000)
+python -m realai.api_server
+# or (legacy, still works)
 python api_server.py
 
-# Custom port
-python api_server.py --port 8080
+# Custom port (use PORT env var)
+PORT=8080 python -m realai.api_server
 ```
 
 ### Production Server
@@ -577,8 +579,8 @@ Any OpenAI-compatible UI can connect to RealAI:
 lsof -i :8000  # Linux/Mac
 netstat -ano | findstr :8000  # Windows
 
-# Kill process or use different port
-python api_server.py --port 8080
+# Kill process or use different port (use PORT env var)
+PORT=8080 python -m realai.api_server
 ```
 
 #### Lambda deployment fails

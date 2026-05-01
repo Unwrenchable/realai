@@ -14,11 +14,69 @@ requests to the real AI service.  You can also supply ``X-Provider`` to pick
 the provider explicitly, and ``X-Base-URL`` to override the endpoint.
 """
 
+import hashlib
 import json
 import os
+import sqlite3
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from . import RealAI, PROVIDER_CONFIGS, PROVIDER_ENV_VARS
+
+# ---------------------------------------------------------------------------
+# Database helpers
+# ---------------------------------------------------------------------------
+
+#: Path to the SQLite database file.  Override via ``REALAI_DB_PATH``.
+_DEFAULT_DB_PATH = os.path.join(
+    os.environ.get("REALAI_DATA_DIR", os.path.expanduser("~/.realai")),
+    "conversations.db",
+)
+
+
+def init_db(db_path: str = _DEFAULT_DB_PATH) -> str:
+    """Initialise the SQLite database, creating tables if they don't exist.
+
+    Safe to call multiple times; uses ``CREATE TABLE IF NOT EXISTS`` so it is
+    idempotent.  Returns the resolved *db_path* for convenience.
+
+    Schema
+    ------
+    users
+        Keyed by ``external_id`` — an opaque string identifying a caller.
+        Values are either a short hash of the bearer token
+        (``key:<sha256_prefix>``) or an anonymous tag (``anon:<client_ip>``).
+
+    chat_messages
+        One row per message exchanged, linked to a user by ``user_external_id``
+        so that the full history for any identity can be fetched without a JOIN.
+    """
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    con = sqlite3.connect(db_path)
+    try:
+        con.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                external_id TEXT    NOT NULL UNIQUE,
+                created_at  INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_external_id TEXT    NOT NULL,
+                role             TEXT    NOT NULL,
+                content          TEXT    NOT NULL,
+                created_at       INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_messages_user
+                ON chat_messages(user_external_id);
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+    return db_path
 
 # ---------------------------------------------------------------------------
 # Provider metadata for the web UI
@@ -513,6 +571,38 @@ class RealAIAPIHandler(BaseHTTPRequestHandler):
         body = self.rfile.read(content_length)
         return json.loads(body.decode()) if body else {}
 
+    def _resolve_user_id(self) -> str:
+        """Return a stable external identifier for the calling user.
+
+        Resolution order
+        ----------------
+        1. If an ``Authorization: Bearer <key>`` header is present, return
+           ``key:<first-16-hex-chars-of-sha256(key)>``.  This gives a
+           consistent, non-reversible identity without storing the raw key.
+        2. Otherwise return ``anon:<client_ip>``, where ``client_ip`` is read
+           from ``X-Forwarded-For`` (first entry) or ``X-Real-IP`` before
+           falling back to the TCP connection address.  This ensures the
+           correct address is used when the server runs behind a reverse proxy
+           or load balancer.
+        """
+        auth = self.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            raw_key = auth[len("Bearer "):].strip()
+            if raw_key:
+                digest = hashlib.sha256(raw_key.encode()).hexdigest()
+                return f"key:{digest[:16]}"
+        # Prefer forwarded-for headers so the anonymous identity reflects the
+        # real client rather than the address of an intermediate proxy.
+        forwarded_for = self.headers.get("X-Forwarded-For", "")
+        if forwarded_for:
+            client_ip = forwarded_for.split(",")[0].strip()
+        else:
+            client_ip = (
+                self.headers.get("X-Real-IP")
+                or (self.client_address[0] if self.client_address else "unknown")
+            )
+        return f"anon:{client_ip}"
+
     def _get_model(self, model_name: str = "realai-2.0") -> RealAI:
         """Build a :class:`~realai.RealAI` instance from request headers.
 
@@ -747,6 +837,10 @@ def run_server(host: str = "0.0.0.0", port: int = 8000):
         host (str): Host to bind to
         port (int): Port to listen on
     """
+    # Initialise the database once before accepting any requests.
+    db_path = os.environ.get("REALAI_DB_PATH", _DEFAULT_DB_PATH)
+    init_db(db_path)
+
     server_address = (host, port)
     httpd = HTTPServer(server_address, RealAIAPIHandler)
 

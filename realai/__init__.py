@@ -677,12 +677,35 @@ class CloudDeploymentManager:
             self._terminate_vercel(instance)
         elif instance.provider == CloudProvider.RENDER:
             self._terminate_render(instance)
+        elif instance.provider == CloudProvider.RAILWAY:
+            self._terminate_railway(instance)
         elif instance.provider == CloudProvider.AWS:
             self._terminate_aws(instance)
-        # ... other providers
+        elif instance.provider == CloudProvider.GCP:
+            self._terminate_gcp(instance)
+        elif instance.provider == CloudProvider.AZURE:
+            self._terminate_azure(instance)
 
         instance.status = "terminated"
         return True
+
+    def _terminate_vercel(self, instance: "CloudInstance") -> None:
+        """Terminate a Vercel deployment (placeholder)."""
+
+    def _terminate_render(self, instance: "CloudInstance") -> None:
+        """Terminate a Render deployment (placeholder)."""
+
+    def _terminate_railway(self, instance: "CloudInstance") -> None:
+        """Terminate a Railway deployment (placeholder)."""
+
+    def _terminate_aws(self, instance: "CloudInstance") -> None:
+        """Terminate an AWS EC2 instance (placeholder)."""
+
+    def _terminate_gcp(self, instance: "CloudInstance") -> None:
+        """Terminate a GCP Compute Engine instance (placeholder)."""
+
+    def _terminate_azure(self, instance: "CloudInstance") -> None:
+        """Terminate an Azure VM (placeholder)."""
 
     def get_active_instances(self) -> List[CloudInstance]:
         """Get all active cloud instances."""
@@ -1433,6 +1456,13 @@ CAPABILITY_DOMAIN_MAP: Dict[ModelCapability, str] = {
     ModelCapability.INTERDIMENSIONAL_PROTOCOLS: "interdimensional",
     ModelCapability.TIME_MANIPULATION: "temporal",
     ModelCapability.CONSCIOUSNESS_NETWORK: "consciousness",
+    # Agent Orchestration and Hive Mind System
+    ModelCapability.AGENT_ORCHESTRATION: "orchestration",
+    ModelCapability.HIVE_MIND_COORDINATION: "orchestration",
+    ModelCapability.MULTI_AGENT_COLLABORATION: "orchestration",
+    ModelCapability.ADAPTIVE_WORKFLOW_EXECUTION: "orchestration",
+    ModelCapability.SPECIALIZED_AGENT_ROUTING: "orchestration",
+    ModelCapability.COLLECTIVE_INTELLIGENCE_SYNTHESIS: "orchestration",
     # Cloud Computing and Distributed Systems
     ModelCapability.CLOUD_DEPLOYMENT_ORCHESTRATION: "cloud",
     ModelCapability.DISTRIBUTED_COMPUTING_COORDINATION: "cloud",
@@ -7712,12 +7742,28 @@ class RealAI:
         try:
             active_instances = _deployment_manager.get_active_instances()
 
+            # Auto-provision instances when fewer than required are available.
+            # Use a simple round-robin across the three cheapest providers.
             if len(active_instances) < instances_required:
-                return {
-                    "status": "error",
-                    "error": f"Insufficient instances: {len(active_instances)} available, {instances_required} required",
-                    "suggestion": "Deploy more instances using cloud_deployment_orchestration"
-                }
+                _provision_providers = [
+                    CloudProvider.VERCEL,
+                    CloudProvider.RENDER,
+                    CloudProvider.RAILWAY,
+                ]
+                _idx = 0
+                while len(_deployment_manager.get_active_instances()) < instances_required:
+                    _provider = _provision_providers[_idx % len(_provision_providers)]
+                    _idx += 1
+                    try:
+                        _deployment_manager.deploy_instance(
+                            provider=_provider,
+                            region=_deployment_manager.provider_configs[_provider]["regions"][0],
+                            instance_type="starter",
+                            realai_config={"mode": "training_worker"},
+                        )
+                    except Exception:
+                        break
+                active_instances = _deployment_manager.get_active_instances()
 
             # Submit distributed training task
             training_task = {

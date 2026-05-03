@@ -151,10 +151,14 @@ class RealAILauncher(tk.Tk):
     def _build_ui(self) -> None:
         pad = self._PAD
 
+        # Set a minimum size so the Save/Start buttons are always reachable.
+        self.minsize(620, 560)
+
         # Header bar
         header = tk.Frame(self, bg=self._HEADER_BG)
-        header.grid(row=0, column=0, sticky="ew")
+        header.grid(row=0, column=0, columnspan=2, sticky="ew")
         self.columnconfigure(0, weight=1)
+        self.columnconfigure(1, weight=0)
         tk.Label(
             header,
             text="\U0001f916  RealAI v2.0",
@@ -172,21 +176,56 @@ class RealAILauncher(tk.Tk):
             pady=2,
         ).pack()
 
-        # API key form
-        form = tk.Frame(self, padx=pad, pady=pad)
-        form.grid(row=1, column=0, sticky="nsew")
+        # Scrollable canvas + scrollbar for the API key form (row 1).
+        self.rowconfigure(1, weight=1)
+        _form_canvas = tk.Canvas(self, borderwidth=0, highlightthickness=0)
+        _form_canvas.grid(row=1, column=0, sticky="nsew")
+        _form_vscroll = tk.Scrollbar(self, orient="vertical", command=_form_canvas.yview)
+        _form_vscroll.grid(row=1, column=1, sticky="ns")
+        _form_canvas.configure(yscrollcommand=_form_vscroll.set)
+
+        # Inner frame that holds all the provider rows.
+        form = tk.Frame(_form_canvas, padx=pad, pady=pad)
         form.columnconfigure(0, weight=1)
+        _form_win = _form_canvas.create_window((0, 0), window=form, anchor="nw")
+
+        def _on_form_configure(event: tk.Event) -> None:
+            _form_canvas.configure(scrollregion=_form_canvas.bbox("all"))
+
+        def _on_canvas_resize(event: tk.Event) -> None:
+            _form_canvas.itemconfig(_form_win, width=event.width)
+
+        form.bind("<Configure>", _on_form_configure)
+        _form_canvas.bind("<Configure>", _on_canvas_resize)
+
+        # Mouse-wheel scrolling (Windows uses <MouseWheel>, Linux uses Button-4/5).
+        def _on_mousewheel(event: tk.Event) -> None:
+            if event.num == 4:
+                _form_canvas.yview_scroll(-1, "units")
+            elif event.num == 5:
+                _form_canvas.yview_scroll(1, "units")
+            else:
+                _form_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        for widget in (form, _form_canvas):
+            widget.bind("<MouseWheel>", _on_mousewheel)
+            widget.bind("<Button-4>", _on_mousewheel)
+            widget.bind("<Button-5>", _on_mousewheel)
 
         for row_idx, (provider_id, info) in enumerate(PROVIDERS.items()):
             base = row_idx * 3
 
             # Label
-            tk.Label(
+            lbl = tk.Label(
                 form,
                 text=f"{info['label']} API Key",
                 font=("Segoe UI", 10, "bold"),
                 anchor="w",
-            ).grid(row=base, column=0, columnspan=2, sticky="w", pady=(pad // 2, 0))
+            )
+            lbl.grid(row=base, column=0, columnspan=2, sticky="w", pady=(pad // 2, 0))
+            lbl.bind("<MouseWheel>", _on_mousewheel)
+            lbl.bind("<Button-4>", _on_mousewheel)
+            lbl.bind("<Button-5>", _on_mousewheel)
 
             # Password entry
             entry = tk.Entry(form, width=50, show="\u2022", font=("Consolas", 10))
@@ -209,15 +248,19 @@ class RealAILauncher(tk.Tk):
             ).grid(row=base + 1, column=1, pady=(2, 0))
 
             # Help text
-            tk.Label(
+            help_lbl = tk.Label(
                 form,
                 text=info["help"],
                 font=("Segoe UI", 8),
                 fg="#777",
                 anchor="w",
-            ).grid(row=base + 2, column=0, columnspan=2, sticky="w")
+            )
+            help_lbl.grid(row=base + 2, column=0, columnspan=2, sticky="w")
+            help_lbl.bind("<MouseWheel>", _on_mousewheel)
+            help_lbl.bind("<Button-4>", _on_mousewheel)
+            help_lbl.bind("<Button-5>", _on_mousewheel)
 
-        # Status bar
+        # Status bar — always visible below the scrollable form.
         self._status_var = tk.StringVar(value="Ready \u2014 enter your API keys above.")
         tk.Label(
             self,
@@ -227,11 +270,11 @@ class RealAILauncher(tk.Tk):
             anchor="w",
             padx=pad,
             pady=4,
-        ).grid(row=2, column=0, sticky="ew")
+        ).grid(row=2, column=0, columnspan=2, sticky="ew")
 
-        # Button row
+        # Button row — always visible, never pushed off screen.
         btn_row = tk.Frame(self, padx=pad, pady=pad // 2)
-        btn_row.grid(row=3, column=0, sticky="ew")
+        btn_row.grid(row=3, column=0, columnspan=2, sticky="ew")
 
         tk.Button(
             btn_row,
@@ -290,7 +333,7 @@ class RealAILauncher(tk.Tk):
             relief="groove",
             borderwidth=2,
         )
-        chat_frame.grid(row=4, column=0, sticky="nsew", padx=pad, pady=(0, pad))
+        chat_frame.grid(row=4, column=0, columnspan=2, sticky="nsew", padx=pad, pady=(0, pad))
         self.rowconfigure(4, weight=1)
         
         # Conversation display (scrollable)

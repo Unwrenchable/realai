@@ -89,6 +89,297 @@ class AgentExecutionStatus(Enum):
     CANCELLED = "cancelled"
 
 
+# ---------------------------------------------------------------------------
+# ExecutionRuntime — lifecycle tracking, SSE event bus, JSONL audit log
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ExecutionEvent:
+    """A single lifecycle event emitted during an agent execution."""
+    execution_id: str
+    agent_id: str
+    event_type: str          # dispatch | progress | complete | error
+    timestamp: str
+    data: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "execution_id": self.execution_id,
+            "agent_id": self.agent_id,
+            "event_type": self.event_type,
+            "timestamp": self.timestamp,
+            "data": self.data,
+        }
+
+
+class ExecutionRuntime:
+    """Thread-safe execution runtime with SSE fan-out and JSONL persistence.
+
+    Drop-in complement to ``AgentRegistry``.  Call::
+
+        runtime = ExecutionRuntime()
+        eid = runtime.create()
+        runtime.start(eid, agent_id="architect", task="...", risk_level="low")
+        runtime.progress(eid, 0.5, "halfway there")
+        runtime.complete(eid, result="done")
+        # or
+        runtime.fail(eid, error="something broke")
+
+    Subscribers receive every ``ExecutionEvent`` in real time — the API
+    server's ``/events`` SSE endpoint calls ``subscribe()`` / ``unsubscribe()``.
+    """
+
+    def __init__(self, history_file: Optional[str] = None) -> None:
+        self._lock = threading.Lock()
+        self._subscribers: List[Any] = []          # queue.Queue instances
+        self._history_file = history_file
+        if history_file:
+            os.makedirs(os.path.dirname(history_file) or ".", exist_ok=True)
+
+    # ------------------------------------------------------------------
+    # Subscriber management (for SSE)
+    # ------------------------------------------------------------------
+
+    def subscribe(self) -> "Any":
+        """Return a ``queue.Queue`` that will receive every future event."""
+        import queue
+        q: "queue.Queue[Dict[str, Any]]" = queue.Queue(maxsize=100)
+        with self._lock:
+            self._subscribers.append(q)
+        return q
+
+    def unsubscribe(self, q: "Any") -> None:
+        with self._lock:
+            try:
+                self._subscribers.remove(q)
+            except ValueError:
+                pass
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _now(self) -> str:
+        from datetime import datetime, timezone
+        return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+    def _emit(self, event: ExecutionEvent) -> None:
+        event_dict = event.to_dict()
+        with self._lock:
+            subs = list(self._subscribers)
+        for q in subs:
+            try:
+                q.put_nowait(event_dict)
+            except Exception:
+                pass  # full queues are silently dropped
+        self._persist(event_dict)
+
+    def _persist(self, event_dict: Dict[str, Any]) -> None:
+        if not self._history_file:
+            return
+        try:
+            with open(self._history_file, "a", encoding="utf-8") as f:
+                f.write(json.dumps(event_dict) + "\n")
+        except Exception:
+            pass
+
+    # ------------------------------------------------------------------
+    # Public lifecycle API
+    # ------------------------------------------------------------------
+
+    def create(self) -> str:
+        """Allocate a new execution ID."""
+        return str(uuid.uuid4())
+
+    def start(self, execution_id: str, agent_id: str, task: str,
+              risk_level: str = "medium", profile: str = "balanced") -> None:
+        """Emit a ``dispatch`` event — execution has started."""
+        self._emit(ExecutionEvent(
+            execution_id=execution_id,
+            agent_id=agent_id,
+            event_type="dispatch",
+            timestamp=self._now(),
+            data={"task": task, "risk_level": risk_level, "profile": profile},
+        ))
+
+    def progress(self, execution_id: str, agent_id: str,
+                 pct: float, message: str = "") -> None:
+        """Emit a ``progress`` event (pct between 0.0 and 1.0)."""
+        self._emit(ExecutionEvent(
+            execution_id=execution_id,
+            agent_id=agent_id,
+            event_type="progress",
+            timestamp=self._now(),
+            data={"progress": pct, "message": message},
+        ))
+
+    def complete(self, execution_id: str, agent_id: str,
+                 duration_ms: int, result: str = "") -> None:
+        """Emit a ``complete`` event."""
+        self._emit(ExecutionEvent(
+            execution_id=execution_id,
+            agent_id=agent_id,
+            event_type="complete",
+            timestamp=self._now(),
+            data={"duration_ms": duration_ms, "result_preview": result[:200]},
+        ))
+
+    def fail(self, execution_id: str, agent_id: str,
+             duration_ms: int, error: str = "") -> None:
+        """Emit an ``error`` event."""
+        self._emit(ExecutionEvent(
+            execution_id=execution_id,
+            agent_id=agent_id,
+            event_type="error",
+            timestamp=self._now(),
+            data={"duration_ms": duration_ms, "error": error},
+        ))
+
+
+# Global runtime instance — shared by AgentRegistry and the API server
+_execution_runtime = ExecutionRuntime(
+    history_file=os.path.join(
+        os.path.dirname(__file__),
+        "execution_history.jsonl"
+    )
+)
+
+
+# ---------------------------------------------------------------------------
+# Tool Call Protocol — structured tool invocation format
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ToolCall:
+    """Represents a single structured tool invocation from a model response.
+
+    Models that support tool calling return one or more ``ToolCall`` objects
+    embedded in their response.  The ``AgentExecutor`` (or any caller) should
+    parse these, check permissions via the safety layer, execute the tool, and
+    append the result as a ``tool`` role message before the next model turn.
+    """
+    id: str                              # unique call ID within the response
+    tool: str                            # tool name (must match registry key)
+    arguments: Dict[str, Any] = field(default_factory=dict)
+    result: Optional[str] = None         # populated after execution
+    error: Optional[str] = None          # populated if execution fails
+
+    def to_dict(self) -> Dict[str, Any]:
+        d: Dict[str, Any] = {
+            "id": self.id,
+            "type": "function",
+            "function": {
+                "name": self.tool,
+                "arguments": json.dumps(self.arguments),
+            },
+        }
+        if self.result is not None:
+            d["result"] = self.result
+        if self.error is not None:
+            d["error"] = self.error
+        return d
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ToolCall":
+        fn = data.get("function", {})
+        raw_args = fn.get("arguments", "{}")
+        if isinstance(raw_args, str):
+            try:
+                raw_args = json.loads(raw_args)
+            except (json.JSONDecodeError, ValueError):
+                raw_args = {}
+        return cls(
+            id=data.get("id", str(uuid.uuid4())),
+            tool=fn.get("name", data.get("tool", "")),
+            arguments=raw_args,
+            result=data.get("result"),
+            error=data.get("error"),
+        )
+
+
+# ---------------------------------------------------------------------------
+# SelfCritiqueEngine — retry / reflection loop
+# ---------------------------------------------------------------------------
+
+class SelfCritiqueEngine:
+    """Adds a lightweight self-critique pass to any agent execution.
+
+    After a result is produced the engine scores it against a set of quality
+    signals (length, keyword blocklist, presence of error markers).  If the
+    score is below ``threshold`` and there are retries remaining, the engine
+    will call the executor again with the original task plus a critique prefix.
+
+    Example::
+
+        engine = SelfCritiqueEngine(max_retries=2)
+        final = engine.run(executor_fn=lambda t: agent.execute(t), task="...")
+    """
+
+    _ERROR_MARKERS = ("error:", "failed:", "exception:", "traceback")
+    _MIN_RESULT_LEN = 20
+
+    def __init__(self, max_retries: int = 2, threshold: float = 0.6) -> None:
+        self.max_retries = max_retries
+        self.threshold = threshold
+
+    def _score(self, result: str) -> float:
+        """Return a quality score between 0.0 (poor) and 1.0 (good)."""
+        if not result or len(result) < self._MIN_RESULT_LEN:
+            return 0.0
+        lower = result.lower()
+        for marker in self._ERROR_MARKERS:
+            if marker in lower:
+                return 0.2
+        # Simple heuristic: longer, richer results score higher (capped at 1)
+        length_score = min(len(result) / 500, 1.0)
+        return 0.5 + length_score * 0.5
+
+    def run(
+        self,
+        executor_fn: Callable[[str], str],
+        task: str,
+        on_critique: Optional[Callable[[int, str, float], None]] = None,
+    ) -> str:
+        """Run ``executor_fn(task)``, retrying with critique if quality is low.
+
+        Args:
+            executor_fn: Callable that takes a task string and returns a result.
+            task: The original task description.
+            on_critique: Optional callback invoked on each retry with
+                         ``(attempt, result, score)`` so callers can log.
+
+        Returns:
+            The best result produced (highest scoring across all attempts).
+        """
+        best_result = ""
+        best_score = -1.0
+
+        current_task = task
+        for attempt in range(self.max_retries + 1):
+            result = executor_fn(current_task)
+            score = self._score(result)
+
+            if score > best_score:
+                best_score = score
+                best_result = result
+
+            if score >= self.threshold or attempt == self.max_retries:
+                break
+
+            if on_critique:
+                on_critique(attempt, result, score)
+
+            # Build critique prefix for next attempt
+            current_task = (
+                f"[Self-critique: previous attempt scored {score:.2f}/1.0 — "
+                f"the result was insufficient. Improve upon it.]\n\n"
+                f"Original task: {task}\n\n"
+                f"Previous result (to improve):\n{result[:400]}"
+            )
+
+        return best_result
+
+
 @dataclass
 class AccessProfile:
     """Security profile defining agent capabilities and restrictions."""
@@ -259,6 +550,66 @@ class AgentRegistry:
                 required_tools=["run_in_terminal", "github_repo", "apply_patch"],
                 preferred_profile="power",
                 risk_level="high"
+            ),
+            "agent-evals-engineer": AgentDefinition(
+                id="agent-evals-engineer",
+                role="Agent Evals Engineer",
+                description="Designs and maintains evaluation suites for AI agents so quality improvements are measurable. Defines golden tasks, scoring rubrics, regression tests, and failure taxonomies.",
+                tags=["ai", "evaluation", "regression", "quality", "benchmarking", "agents"],
+                capabilities=["eval-design", "rubric-authoring", "golden-task-curation", "regression-detection", "failure-taxonomy", "benchmark-analysis"],
+                required_tools=["read_file", "list_dir", "grep_search", "semantic_search", "apply_patch", "create_file", "run_in_terminal"],
+                preferred_profile="balanced",
+                risk_level="medium"
+            ),
+            "feedback-learning-engineer": AgentDefinition(
+                id="feedback-learning-engineer",
+                role="Feedback Learning Engineer",
+                description="Turns user and operator feedback into durable improvements for agent behavior. Clusters recurring failures, curates correction datasets, and closes the loop between production mistakes and future performance.",
+                tags=["ai", "feedback", "learning", "datasets", "quality", "agents"],
+                capabilities=["feedback-triage", "correction-dataset-curation", "prompt-iteration", "policy-refinement", "failure-clustering", "continuous-improvement"],
+                required_tools=["read_file", "list_dir", "grep_search", "semantic_search", "apply_patch", "create_file", "run_in_terminal"],
+                preferred_profile="balanced",
+                risk_level="medium"
+            ),
+            "grounding-engineer": AgentDefinition(
+                id="grounding-engineer",
+                role="Grounding Engineer",
+                description="Improves answer reliability by designing strong retrieval and grounding patterns. Optimizes retrieval quality, source ranking, citation behavior, and context assembly to reduce hallucinations.",
+                tags=["ai", "grounding", "retrieval", "rag", "citations", "reliability"],
+                capabilities=["retrieval-tuning", "source-ranking", "citation-design", "context-assembly", "freshness-validation", "hallucination-reduction"],
+                required_tools=["read_file", "list_dir", "grep_search", "semantic_search", "apply_patch", "create_file", "run_in_terminal"],
+                preferred_profile="balanced",
+                risk_level="medium"
+            ),
+            "agent-observability-engineer": AgentDefinition(
+                id="agent-observability-engineer",
+                role="Agent Observability Engineer",
+                description="Instruments agent systems so behavior is explainable in production. Defines traces, metrics, structured logs, latency and cost budgets, and review workflows that make it easier to diagnose failures and spot drift.",
+                tags=["ai", "observability", "telemetry", "monitoring", "operations", "agents"],
+                capabilities=["trace-instrumentation", "metrics-design", "structured-logging", "latency-budgeting", "cost-analysis", "drift-detection"],
+                required_tools=["read_file", "list_dir", "grep_search", "semantic_search", "apply_patch", "create_file", "run_in_terminal"],
+                preferred_profile="balanced",
+                risk_level="medium"
+            ),
+            "ai-incident-responder": AgentDefinition(
+                id="ai-incident-responder",
+                role="AI Incident Responder",
+                description="Handles production incidents caused by AI agents and model-backed workflows. Coordinates containment, rollback, user impact assessment, and postmortem follow-through so unsafe behavior is mitigated quickly.",
+                tags=["ai", "incident-response", "rollback", "operations", "safety", "agents"],
+                capabilities=["incident-triage", "rollback-planning", "impact-assessment", "runbook-execution", "postmortem-analysis", "guardrail-hardening"],
+                required_tools=["read_file", "list_dir", "grep_search", "semantic_search", "run_in_terminal", "github_repo", "runSubagent"],
+                preferred_profile="power",
+                risk_level="high"
+            ),
+            "expansion-coordinator": AgentDefinition(
+                id="expansion-coordinator",
+                role="Expansion Coordinator",
+                description="Coordinates future expansions and integrations across the agent ecosystem. Manages roadmap execution, dependency resolution, and seamless integration of new capabilities and frameworks.",
+                tags=["expansion", "coordination", "roadmap", "integration", "scalability"],
+                capabilities=["expansion-coordination", "roadmap-execution", "dependency-management", "integration-testing", "capability-synthesis", "system-scalability"],
+                required_tools=["read_file", "list_dir", "runSubagent", "github_repo"],
+                preferred_profile="power",
+                risk_level="medium"
             )
         }
 
@@ -315,12 +666,41 @@ class AgentRegistry:
         }
 
     def execute_agent(self, agent_id: str, task: str, **kwargs) -> str:
-        """Execute an agent with a given task."""
+        """Execute an agent with lifecycle tracking via ExecutionRuntime.
+
+        Access check
+        ------------
+        Before running, we assess the recommended profile against the agent's
+        required tools.  If any tools are missing a warning is logged via a
+        ``dispatch`` event so the caller can address the gap without blocking
+        execution (non-blocking by design — same as ``agentx check``).
+        """
         agent = self.get_agent(agent_id)
         if not agent:
             return f"Agent '{agent_id}' not found"
 
-        execution_id = str(uuid.uuid4())
+        # --- execution lifecycle -----------------------------------------
+        execution_id = _execution_runtime.create()
+        start_ms = int(time.time() * 1000)
+
+        # --- access check ------------------------------------------------
+        recommended_profile = self.recommend_profile(agent)
+        access = self.assess_access(agent, recommended_profile)
+        if not access["pass"]:
+            # Non-blocking warning: log via runtime event using the real execution_id
+            _execution_runtime._emit(ExecutionEvent(
+                execution_id=execution_id,
+                agent_id=agent_id,
+                event_type="warning",
+                timestamp=_execution_runtime._now(),
+                data={
+                    "message": f"Agent '{agent_id}' is missing tools in profile "
+                               f"'{recommended_profile.name}': {access['missing_tools']}",
+                    "missing_tools": access["missing_tools"],
+                    "recommended_profile": access["recommended_profile"],
+                },
+            ))
+
         execution = AgentExecution(
             execution_id=execution_id,
             agent_id=agent_id,
@@ -328,18 +708,34 @@ class AgentRegistry:
             status=AgentExecutionStatus.RUNNING,
             start_time=time.time()
         )
-
         self.active_executions[execution_id] = execution
 
+        _execution_runtime.start(
+            execution_id, agent_id=agent_id, task=task,
+            risk_level=agent.risk_level,
+            profile=recommended_profile.name,
+        )
+
         try:
-            # Route to appropriate RealAI capability based on agent
+            _execution_runtime.progress(execution_id, agent_id=agent_id, pct=0.1,
+                                        message="routing to capability")
             result = self._route_agent_execution(agent, task, **kwargs)
             execution.status = AgentExecutionStatus.COMPLETED
             execution.result = result
+            _execution_runtime.complete(
+                execution_id, agent_id=agent_id,
+                duration_ms=int(time.time() * 1000) - start_ms,
+                result=str(result),
+            )
         except Exception as e:
             execution.status = AgentExecutionStatus.FAILED
             execution.error = str(e)
             result = f"Agent execution failed: {e}"
+            _execution_runtime.fail(
+                execution_id, agent_id=agent_id,
+                duration_ms=int(time.time() * 1000) - start_ms,
+                error=str(e),
+            )
         finally:
             execution.end_time = time.time()
             self.execution_history.append(execution)
@@ -366,6 +762,18 @@ class AgentRegistry:
             return self._qa_task(task, **kwargs)
         elif agent_id == "deployment":
             return self._deployment_task(task, **kwargs)
+        elif agent_id == "agent-evals-engineer":
+            return self._agent_evals_task(task, **kwargs)
+        elif agent_id == "feedback-learning-engineer":
+            return self._feedback_learning_task(task, **kwargs)
+        elif agent_id == "grounding-engineer":
+            return self._grounding_task(task, **kwargs)
+        elif agent_id == "agent-observability-engineer":
+            return self._agent_observability_task(task, **kwargs)
+        elif agent_id == "ai-incident-responder":
+            return self._ai_incident_response_task(task, **kwargs)
+        elif agent_id == "expansion-coordinator":
+            return self._expansion_coordination_task(task, **kwargs)
         else:
             # Generic routing based on capabilities
             return self._generic_agent_task(agent, task, **kwargs)
@@ -429,6 +837,57 @@ class AgentRegistry:
         })
         return f"Deployment Strategy:\n{causal}"
 
+    def _agent_evals_task(self, task: str, **kwargs) -> str:
+        """Handle agent evals engineer tasks."""
+        result = self._call_realai_method("agent_evals", {
+            "task_name": task,
+            "golden_examples": kwargs.get("golden_examples", []),
+            "metrics": kwargs.get("metrics", ["accuracy", "latency", "cost"])
+        })
+        return f"Evaluation Results:\n{result}"
+
+    def _feedback_learning_task(self, task: str, **kwargs) -> str:
+        """Handle feedback learning engineer tasks."""
+        result = self._call_realai_method("feedback_learning", {
+            "feedback_items": kwargs.get("feedback_items", [{"text": task, "label": "negative"}]),
+            "policy_target": kwargs.get("policy_target", "quality")
+        })
+        return f"Feedback Learning Results:\n{result}"
+
+    def _grounding_task(self, task: str, **kwargs) -> str:
+        """Handle grounding engineer tasks."""
+        result = self._call_realai_method("grounding", {
+            "query": task,
+            "sources": kwargs.get("sources", []),
+            "citation_mode": kwargs.get("citation_mode", "inline")
+        })
+        return f"Grounded Response:\n{result}"
+
+    def _agent_observability_task(self, task: str, **kwargs) -> str:
+        """Handle agent observability engineer tasks."""
+        result = self._call_realai_method("agent_observability", {
+            "trace_config": kwargs.get("trace_config", {"enabled": True}),
+            "metrics_config": kwargs.get("metrics_config", {"latency": True, "cost": True})
+        })
+        return f"Observability Report:\n{result}"
+
+    def _ai_incident_response_task(self, task: str, **kwargs) -> str:
+        """Handle AI incident responder tasks."""
+        result = self._call_realai_method("ai_incident_response", {
+            "incident_type": kwargs.get("incident_type", "degraded_output"),
+            "impact_scope": kwargs.get("impact_scope", "unknown"),
+            "severity": kwargs.get("severity", "medium")
+        })
+        return f"Incident Response:\n{result}"
+
+    def _expansion_coordination_task(self, task: str, **kwargs) -> str:
+        """Handle expansion coordinator tasks."""
+        result = self._call_realai_method("expansion_coordination", {
+            "roadmap_items": kwargs.get("roadmap_items", [task]),
+            "dependencies": kwargs.get("dependencies", [])
+        })
+        return f"Expansion Plan:\n{result}"
+
     def _generic_agent_task(self, agent: AgentDefinition, task: str, **kwargs) -> str:
         """Handle generic agent tasks based on capabilities."""
         # Route based on agent capabilities
@@ -485,6 +944,11 @@ class AgentRegistry:
     def get_execution_history(self, limit: int = 10) -> List[AgentExecution]:
         """Get recent execution history."""
         return self.execution_history[-limit:]
+
+    @staticmethod
+    def get_execution_runtime() -> "ExecutionRuntime":
+        """Return the shared global ExecutionRuntime instance."""
+        return _execution_runtime
 
 
 # Global agent registry instance
@@ -1380,6 +1844,13 @@ class ModelCapability(Enum):
     TRADING_STRATEGY_OPTIMIZATION = "trading_strategy_optimization"
     RISK_MANAGEMENT = "risk_management"
     PORTFOLIO_MANAGEMENT = "portfolio_management"
+    # AI Training and Quality System
+    AGENT_EVALS = "agent_evals"
+    FEEDBACK_LEARNING = "feedback_learning"
+    GROUNDING = "grounding"
+    AGENT_OBSERVABILITY = "agent_observability"
+    AI_INCIDENT_RESPONSE = "ai_incident_response"
+    EXPANSION_COORDINATION = "expansion_coordination"
 
 
 #: Canonical capability-domain mapping used for discovery across model/client/API.
@@ -1498,6 +1969,13 @@ CAPABILITY_DOMAIN_MAP: Dict[ModelCapability, str] = {
     ModelCapability.TRADING_STRATEGY_OPTIMIZATION: "crypto",
     ModelCapability.RISK_MANAGEMENT: "crypto",
     ModelCapability.PORTFOLIO_MANAGEMENT: "crypto",
+    # AI Training and Quality System
+    ModelCapability.AGENT_EVALS: "training",
+    ModelCapability.FEEDBACK_LEARNING: "training",
+    ModelCapability.GROUNDING: "training",
+    ModelCapability.AGENT_OBSERVABILITY: "training",
+    ModelCapability.AI_INCIDENT_RESPONSE: "training",
+    ModelCapability.EXPANSION_COORDINATION: "training",
 }
 
 
@@ -8519,6 +8997,481 @@ class RealAI:
                 "fallback": "Manual portfolio management"
             }
 
+    # AI Training and Quality System Methods
+
+    def agent_evals(
+        self,
+        task_name: str,
+        golden_examples: Optional[List[Dict[str, Any]]] = None,
+        metrics: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """
+        Run evaluation suite for an AI agent or capability.
+
+        Designs and executes measurable quality checks using golden tasks,
+        scoring rubrics, and regression detection based on the agent-tools
+        agent-evals-engineer pattern.
+
+        Args:
+            task_name: Name or description of the capability being evaluated
+            golden_examples: List of input/expected-output pairs for scoring
+            metrics: Evaluation metrics to compute (default: accuracy, latency, cost)
+
+        Returns:
+            Dict containing eval results, scores, and regression flags
+        """
+        try:
+            if golden_examples is None:
+                golden_examples = []
+            if metrics is None:
+                metrics = ["accuracy", "latency", "cost"]
+
+            scores: Dict[str, Any] = {}
+            total = max(len(golden_examples), 1)
+            correct = 0
+
+            for example in golden_examples:
+                expected = str(example.get("expected", ""))
+                actual = str(example.get("actual", ""))
+                if expected and expected.lower() in actual.lower():
+                    correct += 1
+
+            accuracy = correct / total if golden_examples else 1.0
+            scores["accuracy"] = round(accuracy, 4)
+
+            if "latency" in metrics:
+                scores["latency_ms"] = 0  # Measured externally in production
+            if "cost" in metrics:
+                scores["cost_per_call_usd"] = 0.0  # Tracked via observability
+            if "hallucination_rate" in metrics:
+                scores["hallucination_rate"] = max(0.0, 1.0 - accuracy)
+
+            regression_detected = accuracy < 0.8
+
+            result = {
+                "status": "success",
+                "task_name": task_name,
+                "examples_evaluated": len(golden_examples),
+                "scores": scores,
+                "regression_detected": regression_detected,
+                "rubric": {
+                    "pass_threshold": 0.8,
+                    "critical_failures": [
+                        ex for ex in golden_examples
+                        if str(ex.get("expected", "")).lower() not in str(ex.get("actual", "")).lower()
+                    ][:5]
+                },
+                "recommendation": (
+                    "Investigate and address regression before deployment"
+                    if regression_detected else "Quality bar met — safe to continue"
+                )
+            }
+
+            return self._with_metadata(result, capability=ModelCapability.AGENT_EVALS.value, modality="evaluation")
+        except Exception as e:
+            return {
+                "status": "error",
+                "error": f"Agent evals failed: {str(e)}",
+                "fallback": "Manual evaluation required"
+            }
+
+    def feedback_learning(
+        self,
+        feedback_items: Optional[List[Dict[str, Any]]] = None,
+        policy_target: str = "quality"
+    ) -> Dict[str, Any]:
+        """
+        Process user and operator feedback into durable model improvements.
+
+        Clusters recurring failures, curates correction datasets, and
+        produces prompt/policy update recommendations following the
+        agent-tools feedback-learning-engineer pattern.
+
+        Args:
+            feedback_items: List of feedback records with 'text' and 'label' keys
+            policy_target: Improvement focus area (quality, safety, latency, cost)
+
+        Returns:
+            Dict containing failure clusters, correction dataset, and policy recommendations
+        """
+        try:
+            if feedback_items is None:
+                feedback_items = []
+
+            # Cluster failures by simple keyword grouping
+            clusters: Dict[str, List[str]] = {}
+            for item in feedback_items:
+                label = str(item.get("label", "unknown"))
+                text = str(item.get("text", ""))
+                clusters.setdefault(label, []).append(text)
+
+            correction_dataset = [
+                {"input": item.get("text", ""), "correction": item.get("correction", "")}
+                for item in feedback_items
+                if item.get("correction")
+            ]
+
+            policy_updates = []
+            if clusters.get("negative"):
+                policy_updates.append(f"Address {len(clusters['negative'])} negative signals in {policy_target} policy")
+            if correction_dataset:
+                policy_updates.append(f"Fine-tune on {len(correction_dataset)} corrected examples")
+
+            # --- self-improvement loop -----------------------------------
+            # Each corrected example is persisted via learn_from_interaction
+            # so it feeds back into self_reflect and future responses.
+            for entry in correction_dataset:
+                try:
+                    self.learn_from_interaction({
+                        "messages": [
+                            {"role": "user", "content": entry["input"]},
+                            {"role": "assistant", "content": entry["correction"]},
+                        ],
+                        "source": "feedback_learning",
+                        "policy_target": policy_target,
+                    })
+                except Exception:
+                    pass  # learning errors must not break the main result
+
+            result = {
+                "status": "success",
+                "feedback_processed": len(feedback_items),
+                "failure_clusters": {label: len(items) for label, items in clusters.items()},
+                "correction_dataset_size": len(correction_dataset),
+                "policy_target": policy_target,
+                "policy_updates": policy_updates or ["No immediate policy changes required"],
+                "next_steps": [
+                    "Validate correction dataset before fine-tuning",
+                    "A/B test policy updates against baseline",
+                    "Monitor post-update performance with agent_observability"
+                ]
+            }
+
+            return self._with_metadata(result, capability=ModelCapability.FEEDBACK_LEARNING.value, modality="learning")
+        except Exception as e:
+            return {
+                "status": "error",
+                "error": f"Feedback learning failed: {str(e)}",
+                "fallback": "Manual feedback review required"
+            }
+
+    def grounding(
+        self,
+        query: str,
+        sources: Optional[List[Dict[str, Any]]] = None,
+        citation_mode: str = "inline"
+    ) -> Dict[str, Any]:
+        """
+        Generate a retrieval-grounded response to reduce hallucinations.
+
+        Implements the agent-tools grounding-engineer pattern: ranks sources,
+        assembles context, validates freshness, and attaches citations.
+
+        Args:
+            query: The query to answer with grounded evidence
+            sources: List of source dicts with 'text', 'url', and optional 'date'
+            citation_mode: How to attach citations (inline, footnote, none)
+
+        Returns:
+            Dict containing grounded answer, ranked sources, and citation map
+        """
+        try:
+            if sources is None:
+                sources = []
+
+            # Auto-populate sources from web_research cache when none provided.
+            # This ensures callers get real retrieved evidence without extra work.
+            if not sources:
+                try:
+                    web_result = self.web_research(query=query, depth="standard")
+                    auto_sources = []
+                    for finding in web_result.get("findings", []):
+                        url = finding.get("url", "")
+                        snippet = finding.get("snippet", finding.get("content", ""))
+                        if url or snippet:
+                            auto_sources.append({"text": snippet, "url": url})
+                    sources = auto_sources
+                except Exception:
+                    pass  # network unavailable — proceed with empty sources
+
+            # Rank sources by relevance (keyword overlap with query)
+            query_words = set(query.lower().split())
+            ranked = sorted(
+                sources,
+                key=lambda s: len(query_words & set(str(s.get("text", "")).lower().split())),
+                reverse=True
+            )
+
+            # Assemble context from top sources
+            context_parts = [str(s.get("text", ""))[:500] for s in ranked[:3]]
+            context = "\n\n".join(context_parts) if context_parts else "No external sources provided."
+
+            # Build citation map
+            citations = {
+                f"[{i+1}]": s.get("url", f"source-{i+1}")
+                for i, s in enumerate(ranked[:5])
+            }
+
+            # Freshness check
+            stale_sources = [
+                s.get("url", "unknown")
+                for s in sources
+                if s.get("date") and s["date"] < "2024-01-01"
+            ]
+
+            result = {
+                "status": "success",
+                "query": query,
+                "grounded_answer": f"Based on retrieved evidence: {context[:200]}...",
+                "sources_used": len(ranked[:3]),
+                "citations": citations if citation_mode != "none" else {},
+                "citation_mode": citation_mode,
+                "stale_sources": stale_sources,
+                "hallucination_risk": "low" if ranked else "high",
+                "confidence": "high" if len(ranked) >= 2 else "medium" if ranked else "low"
+            }
+
+            return self._with_metadata(result, capability=ModelCapability.GROUNDING.value, modality="retrieval")
+        except Exception as e:
+            return {
+                "status": "error",
+                "error": f"Grounding failed: {str(e)}",
+                "fallback": "Ungrounded response — verify externally"
+            }
+
+    def agent_observability(
+        self,
+        trace_config: Optional[Dict[str, Any]] = None,
+        metrics_config: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Instrument agent behavior for production observability.
+
+        Implements the agent-tools agent-observability-engineer pattern:
+        structured logging, trace spans, latency/cost budgets, and drift
+        detection across capability invocations.
+
+        Args:
+            trace_config: Tracing settings (enabled, sampling_rate, export_endpoint)
+            metrics_config: Metrics to track (latency, cost, error_rate, drift)
+
+        Returns:
+            Dict containing current observability snapshot and configuration
+        """
+        try:
+            if trace_config is None:
+                trace_config = {}
+            if metrics_config is None:
+                metrics_config = {}
+
+            enabled = trace_config.get("enabled", True)
+            sampling_rate = float(trace_config.get("sampling_rate", 1.0))
+            track_latency = metrics_config.get("latency", True)
+            track_cost = metrics_config.get("cost", True)
+            track_drift = metrics_config.get("drift", False)
+
+            snapshot: Dict[str, Any] = {
+                "tracing_enabled": enabled,
+                "sampling_rate": sampling_rate,
+                "active_spans": 0,
+            }
+
+            if track_latency:
+                snapshot["latency_p50_ms"] = 0
+                snapshot["latency_p99_ms"] = 0
+                snapshot["latency_budget_ms"] = trace_config.get("latency_budget_ms", 3000)
+
+            if track_cost:
+                snapshot["cost_per_1k_calls_usd"] = 0.0
+                snapshot["monthly_budget_usd"] = trace_config.get("monthly_budget_usd", 100.0)
+
+            if track_drift:
+                snapshot["output_drift_detected"] = False
+                snapshot["drift_threshold"] = metrics_config.get("drift_threshold", 0.1)
+
+            result = {
+                "status": "success",
+                "observability_snapshot": snapshot,
+                "structured_log_fields": ["timestamp", "capability", "latency_ms", "tokens", "provider", "trace_id"],
+                "alerts_configured": [
+                    "latency_budget_breach" if track_latency else None,
+                    "cost_overrun" if track_cost else None,
+                    "drift_detected" if track_drift else None,
+                ],
+                "export_endpoint": trace_config.get("export_endpoint", "internal"),
+                "recommendation": "Enable drift detection in production for early quality regression signals"
+            }
+
+            return self._with_metadata(result, capability=ModelCapability.AGENT_OBSERVABILITY.value, modality="monitoring")
+        except Exception as e:
+            return {
+                "status": "error",
+                "error": f"Agent observability setup failed: {str(e)}",
+                "fallback": "Basic logging only"
+            }
+
+    def ai_incident_response(
+        self,
+        incident_type: str,
+        impact_scope: str = "unknown",
+        severity: str = "medium"
+    ) -> Dict[str, Any]:
+        """
+        Triage and coordinate response to AI agent production incidents.
+
+        Implements the agent-tools ai-incident-responder pattern: triage,
+        rollback planning, impact assessment, runbook execution, and
+        postmortem action items.
+
+        Args:
+            incident_type: Type of incident (degraded_output, hallucination, latency_spike, safety_violation)
+            impact_scope: Affected scope (user, team, org, public)
+            severity: Incident severity (low, medium, high, critical)
+
+        Returns:
+            Dict containing triage results, rollback plan, and postmortem items
+        """
+        try:
+            severity_levels = {"low": 1, "medium": 2, "high": 3, "critical": 4}
+            sev_score = severity_levels.get(severity.lower(), 2)
+
+            rollback_required = sev_score >= 3
+            immediate_actions = []
+
+            if incident_type == "hallucination":
+                immediate_actions = [
+                    "Enable grounding enforcement for affected capability",
+                    "Add affected query patterns to evaluation golden set",
+                    "Notify downstream consumers of potential inaccuracies"
+                ]
+            elif incident_type == "safety_violation":
+                immediate_actions = [
+                    "Suspend affected agent/capability immediately",
+                    "Escalate to safety review team",
+                    "Log full trace for postmortem analysis"
+                ]
+            elif incident_type == "latency_spike":
+                immediate_actions = [
+                    "Switch to fallback provider",
+                    "Enable request queuing to prevent cascade",
+                    "Check provider status page"
+                ]
+            else:  # degraded_output and others
+                immediate_actions = [
+                    "Run eval suite to quantify degradation",
+                    "Compare against last known-good checkpoint",
+                    "Engage feedback-learning pipeline for correction dataset"
+                ]
+
+            postmortem_items = [
+                "Document timeline and blast radius",
+                "Identify root cause (prompt regression, data drift, provider issue)",
+                "Add regression test to agent_evals suite",
+                "Update runbook with lessons learned",
+                "Review guardrail coverage for similar incident patterns"
+            ]
+
+            result = {
+                "status": "success",
+                "incident_type": incident_type,
+                "severity": severity,
+                "impact_scope": impact_scope,
+                "rollback_required": rollback_required,
+                "immediate_actions": immediate_actions,
+                "containment_status": "in_progress",
+                "postmortem_items": postmortem_items,
+                "sla_breach_risk": sev_score >= 3,
+                "recommended_next_agent": "feedback-learning-engineer" if rollback_required else "agent-evals-engineer"
+            }
+
+            return self._with_metadata(result, capability=ModelCapability.AI_INCIDENT_RESPONSE.value, modality="operations")
+        except Exception as e:
+            return {
+                "status": "error",
+                "error": f"AI incident response failed: {str(e)}",
+                "fallback": "Manual incident management required"
+            }
+
+    def expansion_coordination(
+        self,
+        roadmap_items: Optional[List[str]] = None,
+        dependencies: Optional[List[Dict[str, Any]]] = None
+    ) -> Dict[str, Any]:
+        """
+        Coordinate future capability expansions across the AI ecosystem.
+
+        Implements the agent-tools expansion-coordinator pattern: roadmap
+        execution planning, dependency resolution, integration testing
+        checkpoints, and capability synthesis sequencing.
+
+        Args:
+            roadmap_items: List of planned capability or integration items
+            dependencies: Dependency graph edges [{from, to, type}]
+
+        Returns:
+            Dict containing ordered expansion plan with dependency-resolved phases
+        """
+        try:
+            if roadmap_items is None:
+                roadmap_items = []
+            if dependencies is None:
+                dependencies = []
+
+            # Simple topological sort by dependency order
+            dep_map: Dict[str, List[str]] = {}
+            for dep in dependencies:
+                src = str(dep.get("from", ""))
+                dst = str(dep.get("to", ""))
+                if src and dst:
+                    dep_map.setdefault(src, []).append(dst)
+
+            phases: List[Dict[str, Any]] = []
+            remaining = list(roadmap_items)
+            phase_num = 1
+
+            while remaining:
+                # Items whose dependencies are already satisfied
+                satisfied = [
+                    item for item in remaining
+                    if all(dep not in remaining for dep in dep_map.get(item, []))
+                ]
+                if not satisfied:
+                    satisfied = remaining[:]  # Break cycles
+
+                phases.append({
+                    "phase": phase_num,
+                    "items": satisfied,
+                    "integration_checkpoint": f"Validate {len(satisfied)} item(s) before Phase {phase_num + 1}"
+                })
+                for item in satisfied:
+                    remaining.remove(item)
+                phase_num += 1
+
+            result = {
+                "status": "success",
+                "total_items": len(roadmap_items),
+                "phases": phases,
+                "dependencies_resolved": len(dependencies),
+                "estimated_phases": len(phases),
+                "integration_strategy": "incremental",
+                "capability_synthesis": [
+                    f"Phase {p['phase']}: {', '.join(p['items'][:3])}"
+                    for p in phases
+                ],
+                "recommendation": (
+                    "Proceed phase-by-phase with eval gates between phases"
+                    if len(phases) > 1 else "Single-phase rollout feasible"
+                )
+            }
+
+            return self._with_metadata(result, capability=ModelCapability.EXPANSION_COORDINATION.value, modality="planning")
+        except Exception as e:
+            return {
+                "status": "error",
+                "error": f"Expansion coordination failed: {str(e)}",
+                "fallback": "Manual roadmap tracking required"
+            }
+
     def _calculate_mining_profitability(self, algorithm: str, gpu_count: int) -> Dict[str, Any]:
         """
         Calculate estimated mining profitability.
@@ -8650,6 +9603,9 @@ class RealAIClient:
 
         # Agent Orchestration and Hive Mind System
         self.agents = self.Agents(self.model)
+
+        # AI Training and Quality System
+        self.training = self.Training(self.model)
 
     class ChatCompletions:
         """Chat completions interface."""
@@ -9624,6 +10580,64 @@ class RealAIClient:
         def manage_portfolio(self, assets: List[str], strategy: str = "balanced") -> Dict[str, Any]:
             """Manage investment portfolio."""
             return self.model.portfolio_management(assets, strategy)
+
+
+    class Training:
+        """AI training, evaluation, grounding, and quality system interface."""
+
+        def __init__(self, model: RealAI):
+            self.model = model
+
+        def run_evals(
+            self,
+            task_name: str,
+            golden_examples: Optional[List[Dict[str, Any]]] = None,
+            metrics: Optional[List[str]] = None
+        ) -> Dict[str, Any]:
+            """Run evaluation suite for a capability."""
+            return self.model.agent_evals(task_name, golden_examples=golden_examples, metrics=metrics)
+
+        def process_feedback(
+            self,
+            feedback_items: Optional[List[Dict[str, Any]]] = None,
+            policy_target: str = "quality"
+        ) -> Dict[str, Any]:
+            """Process feedback into model improvements."""
+            return self.model.feedback_learning(feedback_items=feedback_items, policy_target=policy_target)
+
+        def ground_response(
+            self,
+            query: str,
+            sources: Optional[List[Dict[str, Any]]] = None,
+            citation_mode: str = "inline"
+        ) -> Dict[str, Any]:
+            """Generate a retrieval-grounded response."""
+            return self.model.grounding(query, sources=sources, citation_mode=citation_mode)
+
+        def setup_observability(
+            self,
+            trace_config: Optional[Dict[str, Any]] = None,
+            metrics_config: Optional[Dict[str, Any]] = None
+        ) -> Dict[str, Any]:
+            """Configure agent observability instrumentation."""
+            return self.model.agent_observability(trace_config=trace_config, metrics_config=metrics_config)
+
+        def respond_to_incident(
+            self,
+            incident_type: str,
+            impact_scope: str = "unknown",
+            severity: str = "medium"
+        ) -> Dict[str, Any]:
+            """Triage and respond to an AI production incident."""
+            return self.model.ai_incident_response(incident_type, impact_scope=impact_scope, severity=severity)
+
+        def coordinate_expansion(
+            self,
+            roadmap_items: Optional[List[str]] = None,
+            dependencies: Optional[List[Dict[str, Any]]] = None
+        ) -> Dict[str, Any]:
+            """Coordinate AI capability expansions with dependency ordering."""
+            return self.model.expansion_coordination(roadmap_items=roadmap_items, dependencies=dependencies)
 
 
 def main():

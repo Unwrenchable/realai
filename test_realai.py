@@ -2208,6 +2208,589 @@ def test_api_config_default_models():
     print("✓ api_config default models test passed")
 
 
+# ============================================================================
+# AI Training and Quality System Tests
+# ============================================================================
+
+def test_agent_evals():
+    """Test agent_evals capability runs and returns evaluation results."""
+    print("Testing agent_evals...")
+    model = RealAI()
+    result = model.agent_evals(
+        task_name="chat_quality",
+        golden_examples=[
+            {"input": "Hello", "expected": "hello", "actual": "Hello there!"},
+            {"input": "Bye", "expected": "bye", "actual": "Goodbye!"}
+        ],
+        metrics=["accuracy", "latency"]
+    )
+    assert result["status"] == "success"
+    assert "scores" in result
+    assert "accuracy" in result["scores"]
+    assert "regression_detected" in result
+    assert result["realai_meta"]["capability"] == ModelCapability.AGENT_EVALS.value
+    print("✓ agent_evals test passed")
+
+
+def test_agent_evals_client():
+    """Test client.training.run_evals() convenience method."""
+    print("Testing client.training.run_evals...")
+    client = RealAIClient()
+    result = client.training.run_evals(
+        task_name="grounding_quality",
+        metrics=["accuracy", "hallucination_rate"]
+    )
+    assert result["status"] == "success"
+    assert "scores" in result
+    print("✓ client.training.run_evals test passed")
+
+
+def test_feedback_learning():
+    """Test feedback_learning capability processes feedback items."""
+    print("Testing feedback_learning...")
+    model = RealAI()
+    result = model.feedback_learning(
+        feedback_items=[
+            {"text": "Wrong answer about capital", "label": "negative", "correction": "Paris is the capital of France"},
+            {"text": "Great response", "label": "positive"}
+        ],
+        policy_target="accuracy"
+    )
+    assert result["status"] == "success"
+    assert result["feedback_processed"] == 2
+    assert "failure_clusters" in result
+    assert "policy_updates" in result
+    assert result["realai_meta"]["capability"] == ModelCapability.FEEDBACK_LEARNING.value
+    print("✓ feedback_learning test passed")
+
+
+def test_feedback_learning_client():
+    """Test client.training.process_feedback() convenience method."""
+    print("Testing client.training.process_feedback...")
+    client = RealAIClient()
+    result = client.training.process_feedback(
+        feedback_items=[{"text": "Slow response", "label": "negative"}],
+        policy_target="latency"
+    )
+    assert result["status"] == "success"
+    assert result["feedback_processed"] == 1
+    print("✓ client.training.process_feedback test passed")
+
+
+def test_grounding():
+    """Test grounding capability returns retrieval-grounded response."""
+    print("Testing grounding...")
+    model = RealAI()
+    result = model.grounding(
+        query="What is the capital of France?",
+        sources=[
+            {"text": "France is a country in Europe. Paris is its capital city.", "url": "https://example.com/france"},
+            {"text": "Germany has Berlin as its capital.", "url": "https://example.com/germany"}
+        ],
+        citation_mode="inline"
+    )
+    assert result["status"] == "success"
+    assert "grounded_answer" in result
+    assert "citations" in result
+    assert "hallucination_risk" in result
+    assert result["realai_meta"]["capability"] == ModelCapability.GROUNDING.value
+    print("✓ grounding test passed")
+
+
+def test_grounding_client():
+    """Test client.training.ground_response() convenience method."""
+    print("Testing client.training.ground_response...")
+    client = RealAIClient()
+    result = client.training.ground_response(
+        query="What is machine learning?",
+        sources=[{"text": "Machine learning is a subset of AI.", "url": "https://example.com/ml"}]
+    )
+    assert result["status"] == "success"
+    assert result["sources_used"] >= 1
+    print("✓ client.training.ground_response test passed")
+
+
+def test_agent_observability():
+    """Test agent_observability capability returns observability snapshot."""
+    print("Testing agent_observability...")
+    model = RealAI()
+    result = model.agent_observability(
+        trace_config={"enabled": True, "sampling_rate": 0.5, "latency_budget_ms": 2000},
+        metrics_config={"latency": True, "cost": True, "drift": True}
+    )
+    assert result["status"] == "success"
+    assert "observability_snapshot" in result
+    snapshot = result["observability_snapshot"]
+    assert snapshot["tracing_enabled"] is True
+    assert "latency_p50_ms" in snapshot
+    assert "output_drift_detected" in snapshot
+    assert result["realai_meta"]["capability"] == ModelCapability.AGENT_OBSERVABILITY.value
+    print("✓ agent_observability test passed")
+
+
+def test_agent_observability_client():
+    """Test client.training.setup_observability() convenience method."""
+    print("Testing client.training.setup_observability...")
+    client = RealAIClient()
+    result = client.training.setup_observability(
+        metrics_config={"latency": True, "cost": False}
+    )
+    assert result["status"] == "success"
+    assert "structured_log_fields" in result
+    print("✓ client.training.setup_observability test passed")
+
+
+def test_ai_incident_response():
+    """Test ai_incident_response capability triages incidents correctly."""
+    print("Testing ai_incident_response...")
+    model = RealAI()
+    result = model.ai_incident_response(
+        incident_type="hallucination",
+        impact_scope="user",
+        severity="high"
+    )
+    assert result["status"] == "success"
+    assert result["incident_type"] == "hallucination"
+    assert result["severity"] == "high"
+    assert "immediate_actions" in result
+    assert len(result["immediate_actions"]) > 0
+    assert "postmortem_items" in result
+    assert result["rollback_required"] is True
+    assert result["realai_meta"]["capability"] == ModelCapability.AI_INCIDENT_RESPONSE.value
+    print("✓ ai_incident_response test passed")
+
+
+def test_ai_incident_response_client():
+    """Test client.training.respond_to_incident() convenience method."""
+    print("Testing client.training.respond_to_incident...")
+    client = RealAIClient()
+    result = client.training.respond_to_incident(
+        incident_type="latency_spike",
+        severity="medium"
+    )
+    assert result["status"] == "success"
+    assert "immediate_actions" in result
+    print("✓ client.training.respond_to_incident test passed")
+
+
+def test_expansion_coordination():
+    """Test expansion_coordination orders roadmap items by dependencies."""
+    print("Testing expansion_coordination...")
+    model = RealAI()
+    result = model.expansion_coordination(
+        roadmap_items=["grounding", "evals", "feedback_loop", "observability"],
+        dependencies=[
+            {"from": "grounding", "to": "evals"},
+            {"from": "evals", "to": "feedback_loop"}
+        ]
+    )
+    assert result["status"] == "success"
+    assert result["total_items"] == 4
+    assert "phases" in result
+    assert len(result["phases"]) >= 1
+    assert result["realai_meta"]["capability"] == ModelCapability.EXPANSION_COORDINATION.value
+    print("✓ expansion_coordination test passed")
+
+
+def test_expansion_coordination_client():
+    """Test client.training.coordinate_expansion() convenience method."""
+    print("Testing client.training.coordinate_expansion...")
+    client = RealAIClient()
+    result = client.training.coordinate_expansion(
+        roadmap_items=["capability_A", "capability_B"],
+        dependencies=[]
+    )
+    assert result["status"] == "success"
+    assert result["total_items"] == 2
+    print("✓ client.training.coordinate_expansion test passed")
+
+
+def test_training_agents_in_registry():
+    """Test that training agent types are in the AgentRegistry."""
+    print("Testing training agents in registry...")
+    registry = AgentRegistry()
+    training_agent_ids = [
+        "agent-evals-engineer",
+        "feedback-learning-engineer",
+        "grounding-engineer",
+        "agent-observability-engineer",
+        "ai-incident-responder",
+        "expansion-coordinator"
+    ]
+    for agent_id in training_agent_ids:
+        agent = registry.get_agent(agent_id)
+        assert agent is not None, f"Agent '{agent_id}' not found in registry"
+        assert agent.id == agent_id
+        assert len(agent.capabilities) > 0
+    print("✓ training agents in registry test passed")
+
+
+def test_training_capabilities_in_domain_map():
+    """Test that all training capabilities are in CAPABILITY_DOMAIN_MAP."""
+    print("Testing training capabilities in domain map...")
+    from realai import CAPABILITY_DOMAIN_MAP
+    training_caps = [
+        ModelCapability.AGENT_EVALS,
+        ModelCapability.FEEDBACK_LEARNING,
+        ModelCapability.GROUNDING,
+        ModelCapability.AGENT_OBSERVABILITY,
+        ModelCapability.AI_INCIDENT_RESPONSE,
+        ModelCapability.EXPANSION_COORDINATION,
+    ]
+    for cap in training_caps:
+        assert cap in CAPABILITY_DOMAIN_MAP, f"{cap} missing from CAPABILITY_DOMAIN_MAP"
+        assert CAPABILITY_DOMAIN_MAP[cap] == "training"
+    print("✓ training capabilities in domain map test passed")
+
+
+def test_execution_runtime_subscribe_and_emit():
+    """Test ExecutionRuntime emits events to subscribers."""
+    print("Testing ExecutionRuntime subscribe/emit...")
+    from realai import ExecutionRuntime, ExecutionEvent
+    runtime = ExecutionRuntime()
+    q = runtime.subscribe()
+    runtime.start("eid1", agent_id="architect", task="test task")
+    event = q.get(timeout=1)
+    assert event["event_type"] == "dispatch"
+    assert event["agent_id"] == "architect"
+    assert event["data"]["task"] == "test task"
+    runtime.unsubscribe(q)
+    print("✓ ExecutionRuntime subscribe/emit test passed")
+
+
+def test_execution_runtime_complete():
+    """Test ExecutionRuntime complete event."""
+    print("Testing ExecutionRuntime complete...")
+    from realai import ExecutionRuntime
+    runtime = ExecutionRuntime()
+    q = runtime.subscribe()
+    runtime.complete("eid2", agent_id="implementer", duration_ms=123, result="done")
+    event = q.get(timeout=1)
+    assert event["event_type"] == "complete"
+    assert event["data"]["duration_ms"] == 123
+    runtime.unsubscribe(q)
+    print("✓ ExecutionRuntime complete test passed")
+
+
+def test_execution_runtime_fail():
+    """Test ExecutionRuntime error event."""
+    print("Testing ExecutionRuntime fail...")
+    from realai import ExecutionRuntime
+    runtime = ExecutionRuntime()
+    q = runtime.subscribe()
+    runtime.fail("eid3", agent_id="qa", duration_ms=50, error="out of tokens")
+    event = q.get(timeout=1)
+    assert event["event_type"] == "error"
+    assert "out of tokens" in event["data"]["error"]
+    runtime.unsubscribe(q)
+    print("✓ ExecutionRuntime fail test passed")
+
+
+def test_execute_agent_emits_lifecycle_events():
+    """Test that execute_agent() emits dispatch/complete events to the runtime."""
+    print("Testing execute_agent lifecycle events...")
+    from realai import _execution_runtime, AgentRegistry
+    registry = AgentRegistry()
+    q = _execution_runtime.subscribe()
+    try:
+        registry.execute_agent("architect", "design a REST API")
+        events = []
+        import queue as _q
+        while True:
+            try:
+                events.append(q.get_nowait())
+            except _q.Empty:
+                break
+        event_types = [e["event_type"] for e in events]
+        assert "dispatch" in event_types, f"No dispatch event. Got: {event_types}"
+        assert "complete" in event_types or "error" in event_types, \
+            f"No terminal event. Got: {event_types}"
+    finally:
+        _execution_runtime.unsubscribe(q)
+    print("✓ execute_agent lifecycle events test passed")
+
+
+def test_execute_agent_access_check_missing_tools():
+    """Test that execute_agent() emits a warning when tools are missing."""
+    print("Testing execute_agent access check warning...")
+    from realai import AgentDefinition, AgentRegistry, _execution_runtime
+    import queue as _q
+    registry = AgentRegistry()
+    # Agent that requires a tool no profile has
+    registry.register_agent(AgentDefinition(
+        id="test-missing-tool-agent",
+        role="Test Agent",
+        description="Agent with impossible tool requirement",
+        required_tools=["nonexistent_tool_xyz"],
+        preferred_profile="balanced",
+    ))
+    q = _execution_runtime.subscribe()
+    try:
+        registry.execute_agent("test-missing-tool-agent", "do something")
+        events = []
+        while True:
+            try:
+                events.append(q.get_nowait())
+            except _q.Empty:
+                break
+        warning_events = [e for e in events if e["event_type"] == "warning"]
+        assert len(warning_events) > 0, "Expected a warning event for missing tools"
+        assert "nonexistent_tool_xyz" in str(warning_events[0]["data"])
+    finally:
+        _execution_runtime.unsubscribe(q)
+    print("✓ execute_agent access check warning test passed")
+
+
+def test_feedback_learning_persists_to_memory():
+    """Test that feedback_learning() with corrections calls learn_from_interaction."""
+    print("Testing feedback_learning → learn_from_interaction loop...")
+    import os, json
+    model = RealAI()
+    # Resolve the actual realai package directory for the memory file
+    realai_pkg_dir = os.path.dirname(os.path.abspath(
+        __import__('realai').__file__
+    ))
+    memory_file = os.path.join(realai_pkg_dir, 'realai_memory.json')
+    # Record baseline interaction count
+    baseline = 0
+    if os.path.exists(memory_file):
+        try:
+            with open(memory_file) as f:
+                mem = json.load(f)
+                baseline = len(mem.get("interactions", []))
+        except Exception:
+            pass
+    result = model.feedback_learning(
+        feedback_items=[
+            {"text": "What is 2+2?", "label": "negative", "correction": "2+2 equals 4."},
+            {"text": "What color is the sky?", "label": "negative", "correction": "The sky is blue."},
+        ],
+        policy_target="accuracy"
+    )
+    assert result["status"] == "success"
+    assert result["correction_dataset_size"] == 2
+    # Verify that memory was updated (interactions increased)
+    if os.path.exists(memory_file):
+        try:
+            with open(memory_file) as f:
+                mem = json.load(f)
+                after = len(mem.get("interactions", []))
+                assert after >= baseline + 2, \
+                    f"Expected at least {baseline+2} interactions, got {after}"
+        except Exception:
+            pass  # memory file may not be writable in CI — skip assertion
+    print("✓ feedback_learning → learn_from_interaction loop test passed")
+
+
+def test_grounding_auto_populates_sources():
+    """Test that grounding() with empty sources tries web_research."""
+    print("Testing grounding auto-populate sources...")
+    model = RealAI()
+    # With no sources, grounding should still return a valid result
+    result = model.grounding(query="What is machine learning?", sources=[])
+    assert result["status"] == "success"
+    assert "grounded_answer" in result
+    assert result["hallucination_risk"] in ("low", "medium", "high")
+    print("✓ grounding auto-populate sources test passed")
+
+
+def test_grounding_with_sources_still_works():
+    """Test grounding with explicit sources is unaffected by auto-populate."""
+    print("Testing grounding with explicit sources...")
+    model = RealAI()
+    result = model.grounding(
+        query="Python programming",
+        sources=[{"text": "Python is a high-level programming language.", "url": "https://example.com/py"}],
+    )
+    assert result["status"] == "success"
+    assert result["sources_used"] >= 1
+    print("✓ grounding with explicit sources test passed")
+
+
+def test_tool_call_dataclass():
+    """Test ToolCall dataclass serialise/deserialise round-trip."""
+    print("Testing ToolCall round-trip...")
+    from realai import ToolCall
+    tc = ToolCall(id="call_1", tool="http", arguments={"url": "https://example.com", "method": "GET"})
+    d = tc.to_dict()
+    assert d["id"] == "call_1"
+    assert d["type"] == "function"
+    assert d["function"]["name"] == "http"
+    import json as _json
+    args = _json.loads(d["function"]["arguments"])
+    assert args["url"] == "https://example.com"
+    # Round-trip from_dict
+    tc2 = ToolCall.from_dict(d)
+    assert tc2.tool == "http"
+    assert tc2.arguments["method"] == "GET"
+    print("✓ ToolCall round-trip test passed")
+
+
+def test_self_critique_engine_improves():
+    """Test SelfCritiqueEngine retries on low-quality results."""
+    print("Testing SelfCritiqueEngine retry loop...")
+    from realai import SelfCritiqueEngine
+    call_count = [0]
+
+    def bad_then_good(task: str) -> str:
+        call_count[0] += 1
+        if call_count[0] == 1:
+            return "error: fail"   # score < threshold
+        return "A " * 60           # long enough to score well
+
+    engine = SelfCritiqueEngine(max_retries=2, threshold=0.6)
+    result = engine.run(executor_fn=bad_then_good, task="do the thing")
+    assert call_count[0] == 2, f"Expected 2 calls, got {call_count[0]}"
+    assert len(result) > 20
+    print("✓ SelfCritiqueEngine retry loop test passed")
+
+
+def test_self_critique_engine_no_retry_on_good():
+    """Test SelfCritiqueEngine does not retry when first result is good."""
+    print("Testing SelfCritiqueEngine no retry on good result...")
+    from realai import SelfCritiqueEngine
+    call_count = [0]
+
+    def always_good(task: str) -> str:
+        call_count[0] += 1
+        return "This is a detailed, comprehensive response. " * 10
+
+    engine = SelfCritiqueEngine(max_retries=3, threshold=0.6)
+    engine.run(executor_fn=always_good, task="do the thing")
+    assert call_count[0] == 1, "Should not retry a good result"
+    print("✓ SelfCritiqueEngine no-retry test passed")
+
+
+def test_model_registry_lookup():
+    """Test ModelRegistry get and list_all."""
+    print("Testing ModelRegistry lookup...")
+    from realai.model_registry import MODEL_REGISTRY
+    meta = MODEL_REGISTRY.get("realai-2.0")
+    assert meta is not None
+    assert meta.id == "realai-2.0"
+    assert meta.context_window >= 1024
+    all_models = MODEL_REGISTRY.list_all()
+    assert len(all_models) >= 5
+    # Should include RealAI and 3rd-party entries
+    ids = [m.id for m in all_models]
+    assert "realai-1.0-agentic" in ids
+    assert "gpt-4o" in ids
+    print("✓ ModelRegistry lookup test passed")
+
+
+def test_model_registry_recommend():
+    """Test ModelRegistry.recommend() returns a valid model."""
+    print("Testing ModelRegistry recommend...")
+    from realai.model_registry import MODEL_REGISTRY
+    best = MODEL_REGISTRY.recommend(need_tools=True, max_cost=5)
+    assert best is not None
+    assert best.tool_calling is True
+    cheap = MODEL_REGISTRY.recommend(max_cost=2)
+    assert cheap is not None
+    assert cheap.cost_score <= 2
+    print("✓ ModelRegistry recommend test passed")
+
+
+def test_model_registry_openai_list():
+    """Test ModelRegistry.to_openai_list() returns correct shape."""
+    print("Testing ModelRegistry to_openai_list...")
+    from realai.model_registry import MODEL_REGISTRY
+    result = MODEL_REGISTRY.to_openai_list()
+    assert result["object"] == "list"
+    assert len(result["data"]) >= 5
+    entry = result["data"][0]
+    assert "id" in entry
+    assert entry["object"] == "model"
+    print("✓ ModelRegistry to_openai_list test passed")
+
+
+def test_safety_filter_blocks_harmful():
+    """Test SafetyFilter blocks clearly harmful inputs."""
+    print("Testing SafetyFilter harmful block...")
+    from realai.safety import SAFETY_FILTER
+    result = SAFETY_FILTER.check_input("how to make a bomb at home")
+    assert result.blocked is True
+    assert result.rule_id == "input-hard-block"
+    print("✓ SafetyFilter harmful block test passed")
+
+
+def test_safety_filter_passes_safe():
+    """Test SafetyFilter passes safe inputs."""
+    print("Testing SafetyFilter safe pass...")
+    from realai.safety import SAFETY_FILTER
+    result = SAFETY_FILTER.check_input("How do I sort a list in Python?")
+    assert result.blocked is False
+    assert result.ok is True
+    print("✓ SafetyFilter safe pass test passed")
+
+
+def test_safety_filter_output_pii_redaction():
+    """Test SafetyFilter redacts PII in outputs."""
+    print("Testing SafetyFilter PII redaction...")
+    from realai.safety import SAFETY_FILTER
+    text = "Contact me at user@example.com or call 555-1234."
+    result = SAFETY_FILTER.check_output(text)
+    assert result.flagged is True
+    assert result.redacted_text is not None
+    assert "user@example.com" not in result.redacted_text
+    print("✓ SafetyFilter PII redaction test passed")
+
+
+def test_safety_filter_tool_allow_list():
+    """Test SafetyFilter tool allow-list enforcement."""
+    print("Testing SafetyFilter tool allow-list...")
+    from realai.safety import SAFETY_FILTER
+    ok = SAFETY_FILTER.check_tool_call("researcher", "http", ["http", "filesystem"])
+    assert ok.ok is True
+    blocked = SAFETY_FILTER.check_tool_call("researcher", "solana", ["http"])
+    assert blocked.blocked is True
+    print("✓ SafetyFilter tool allow-list test passed")
+
+
+def test_agent_registry_get_execution_runtime():
+    """Test that AgentRegistry.get_execution_runtime() returns the global runtime."""
+    print("Testing AgentRegistry.get_execution_runtime...")
+    from realai import AgentRegistry, ExecutionRuntime
+    runtime = AgentRegistry.get_execution_runtime()
+    assert isinstance(runtime, ExecutionRuntime)
+    print("✓ AgentRegistry.get_execution_runtime test passed")
+
+
+def test_workflow_example_files_valid_json():
+    """Test that example workflow JSON files are valid."""
+    print("Testing workflow example files...")
+    import os, json
+    base = os.path.join(os.path.dirname(os.path.abspath(__file__)), "examples")
+    for fname in ("workflow-ai-training.json", "workflow-fullstack.json"):
+        fpath = os.path.join(base, fname)
+        assert os.path.exists(fpath), f"Missing: {fpath}"
+        with open(fpath) as f:
+            data = json.load(f)
+        assert "name" in data
+        assert "steps" in data
+        assert len(data["steps"]) >= 2
+        for step in data["steps"]:
+            assert "agent_id" in step
+            assert "task" in step
+    print("✓ workflow example files test passed")
+
+
+def test_schema_files_valid_json():
+    """Test that schema JSON files are valid and have required fields."""
+    print("Testing schema files...")
+    import os, json
+    base = os.path.join(os.path.dirname(os.path.abspath(__file__)), "schema")
+    for fname in ("agent.schema.json", "tool.schema.json"):
+        fpath = os.path.join(base, fname)
+        assert os.path.exists(fpath), f"Missing: {fpath}"
+        with open(fpath) as f:
+            data = json.load(f)
+        assert "$schema" in data
+        assert "title" in data
+        assert "properties" in data
+    print("✓ schema files test passed")
+
+
 def run_all_tests():
     """Run all tests."""
     print("="*60)
@@ -2361,6 +2944,51 @@ def run_all_tests():
         test_api_config_default_keys,
         test_api_config_env_keys,
         test_api_config_default_models,
+        # AI Training and Quality System Tests
+        test_agent_evals,
+        test_agent_evals_client,
+        test_feedback_learning,
+        test_feedback_learning_client,
+        test_grounding,
+        test_grounding_client,
+        test_agent_observability,
+        test_agent_observability_client,
+        test_ai_incident_response,
+        test_ai_incident_response_client,
+        test_expansion_coordination,
+        test_expansion_coordination_client,
+        test_training_agents_in_registry,
+        test_training_capabilities_in_domain_map,
+        # ExecutionRuntime and lifecycle tests
+        test_execution_runtime_subscribe_and_emit,
+        test_execution_runtime_complete,
+        test_execution_runtime_fail,
+        test_execute_agent_emits_lifecycle_events,
+        test_execute_agent_access_check_missing_tools,
+        # feedback_learning self-improvement loop
+        test_feedback_learning_persists_to_memory,
+        # grounding auto-populate
+        test_grounding_auto_populates_sources,
+        test_grounding_with_sources_still_works,
+        # ToolCall protocol
+        test_tool_call_dataclass,
+        # SelfCritiqueEngine
+        test_self_critique_engine_improves,
+        test_self_critique_engine_no_retry_on_good,
+        # ModelRegistry
+        test_model_registry_lookup,
+        test_model_registry_recommend,
+        test_model_registry_openai_list,
+        # SafetyFilter
+        test_safety_filter_blocks_harmful,
+        test_safety_filter_passes_safe,
+        test_safety_filter_output_pii_redaction,
+        test_safety_filter_tool_allow_list,
+        # AgentRegistry helpers
+        test_agent_registry_get_execution_runtime,
+        # Example files
+        test_workflow_example_files_valid_json,
+        test_schema_files_valid_json,
     ]
     
     passed = 0

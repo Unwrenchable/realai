@@ -577,98 +577,6 @@ function toast(msg) {
 </html>"""
 
 
-# ---------------------------------------------------------------------------
-# Dashboard – minimal real-time agent execution visualiser at GET /dashboard
-# ---------------------------------------------------------------------------
-
-_DASHBOARD_HTML = """<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RealAI Dashboard</title>
-<style>
-  :root { --bg:#0d0d0d; --bg2:#161616; --bg3:#1e1e1e; --border:#2a2a2a;
-          --text:#e0e0e0; --text2:#888; --accent:#6c63ff;
-          --ok:#4caf50; --err:#ef5350; --warn:#ff9800; }
-  * { box-sizing:border-box; margin:0; padding:0; }
-  body { font-family:'Segoe UI',sans-serif; background:var(--bg); color:var(--text);
-         display:flex; flex-direction:column; height:100vh; overflow:hidden; }
-  header { background:var(--bg2); border-bottom:1px solid var(--border);
-           padding:12px 20px; display:flex; align-items:center; gap:12px; }
-  header h1 { font-size:1.1rem; font-weight:700; }
-  #conn-dot { width:10px; height:10px; border-radius:50%; background:var(--err);
-              transition:background .3s; }
-  #conn-dot.live { background:var(--ok); }
-  #conn-label { font-size:.75rem; color:var(--text2); }
-  main { flex:1; overflow:auto; padding:20px; display:flex; flex-direction:column; gap:12px; }
-  #events { display:flex; flex-direction:column; gap:8px; }
-  .ev { background:var(--bg2); border:1px solid var(--border); border-radius:8px;
-        padding:10px 14px; animation:fadeIn .25s; }
-  .ev.dispatch  { border-left:3px solid var(--accent); }
-  .ev.progress  { border-left:3px solid var(--warn); }
-  .ev.complete  { border-left:3px solid var(--ok); }
-  .ev.error     { border-left:3px solid var(--err); }
-  .ev.warning   { border-left:3px solid var(--warn); }
-  .ev-hdr { display:flex; gap:8px; align-items:center; margin-bottom:4px; }
-  .ev-type { font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em;
-             padding:2px 8px; border-radius:12px; background:var(--bg3); }
-  .ev-agent { font-size:.8rem; font-weight:600; }
-  .ev-ts { font-size:.7rem; color:var(--text2); margin-left:auto; }
-  .ev-data { font-size:.78rem; color:var(--text2); font-family:monospace; word-break:break-all; }
-  @keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:none} }
-  #empty { text-align:center; color:var(--text2); padding:60px 0; font-size:.9rem; }
-</style>
-</head>
-<body>
-<header>
-  <div id="conn-dot"></div>
-  <span id="conn-label">Connecting…</span>
-  <h1>RealAI — Execution Dashboard</h1>
-</header>
-<main>
-  <div id="events"><div id="empty">Waiting for agent executions…</div></div>
-</main>
-<script>
-const eventsEl = document.getElementById('events');
-const emptyEl  = document.getElementById('empty');
-const dot      = document.getElementById('conn-dot');
-const label    = document.getElementById('conn-label');
-let es;
-
-function connect() {
-  es = new EventSource('/events');
-  es.onopen = () => { dot.classList.add('live'); label.textContent = 'Live'; };
-  es.onerror = () => { dot.classList.remove('live'); label.textContent = 'Reconnecting…';
-                       setTimeout(connect, 3000); es.close(); };
-  es.onmessage = (e) => {
-    let data;
-    try { data = JSON.parse(e.data); } catch (_) { return; }
-    if (emptyEl.parentNode) emptyEl.remove();
-
-    const div = document.createElement('div');
-    div.className = 'ev ' + (data.event_type || '');
-
-    const ts = new Date(data.timestamp || Date.now()).toLocaleTimeString();
-    div.innerHTML =
-      '<div class="ev-hdr">' +
-        '<span class="ev-type">' + (data.event_type || 'event') + '</span>' +
-        '<span class="ev-agent">' + (data.agent_id || '—') + '</span>' +
-        '<span class="ev-ts">' + ts + '</span>' +
-      '</div>' +
-      '<div class="ev-data">' + JSON.stringify(data.data || {}) + '</div>';
-
-    eventsEl.prepend(div);
-    // Keep list bounded to 200 items
-    while (eventsEl.children.length > 200) eventsEl.lastChild.remove();
-  };
-}
-connect();
-</script>
-</body>
-</html>"""
-
-
 class RealAIAPIHandler(BaseHTTPRequestHandler):
     """HTTP request handler for RealAI API."""
 
@@ -836,71 +744,6 @@ class RealAIAPIHandler(BaseHTTPRequestHandler):
         elif parsed_path.path == '/health':
             self._send_response(200, {"status": "healthy", "model": "realai-2.0"})
 
-        elif parsed_path.path == '/v1/agents':
-            # List all registered agents
-            from . import _agent_registry
-            agents = [
-                {
-                    "id": a.id,
-                    "role": a.role,
-                    "description": a.description,
-                    "tags": a.tags,
-                    "capabilities": a.capabilities,
-                    "risk_level": a.risk_level,
-                    "preferred_profile": a.preferred_profile,
-                }
-                for a in _agent_registry.agents.values()
-            ]
-            self._send_response(200, {"object": "list", "data": agents})
-
-        elif parsed_path.path.startswith('/v1/agents/') and parsed_path.path.endswith('/check'):
-            # GET /v1/agents/{id}/check — access assessment for a single agent
-            parts = parsed_path.path.split('/')
-            agent_id = parts[3] if len(parts) >= 5 else ""
-            from . import _agent_registry
-            agent = _agent_registry.get_agent(agent_id)
-            if not agent:
-                self._send_response(404, {"error": f"Agent '{agent_id}' not found"})
-            else:
-                profile_name = parse_qs(parsed_path.query).get("profile", [None])[0]
-                if profile_name and profile_name in _agent_registry.profiles:
-                    profile = _agent_registry.profiles[profile_name]
-                else:
-                    profile = _agent_registry.recommend_profile(agent)
-                result = _agent_registry.assess_access(agent, profile)
-                self._send_response(200, result)
-
-        elif parsed_path.path == '/dashboard':
-            self._send_html_response(200, _DASHBOARD_HTML)
-
-        elif parsed_path.path == '/events':
-            # Server-Sent Events stream for real-time execution updates
-            from . import _execution_runtime
-            import queue as _queue_mod
-            q = _execution_runtime.subscribe()
-            self.send_response(200)
-            self.send_header('Content-Type', 'text/event-stream')
-            self.send_header('Cache-Control', 'no-cache')
-            self.send_header('Connection', 'keep-alive')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            try:
-                while True:
-                    try:
-                        event = q.get(timeout=30)
-                        data = json.dumps(event)
-                        self.wfile.write(f"data: {data}\n\n".encode("utf-8"))
-                        self.wfile.flush()
-                    except _queue_mod.Empty:
-                        # Send a heartbeat keep-alive comment every 30 s
-                        self.wfile.write(b": heartbeat\n\n")
-                        self.wfile.flush()
-            except (BrokenPipeError, ConnectionResetError):
-                pass
-            finally:
-                _execution_runtime.unsubscribe(q)
-            return  # response already sent
-
         else:
             self._send_response(404, {"error": "Not found"})
 
@@ -1034,44 +877,6 @@ class RealAIAPIHandler(BaseHTTPRequestHandler):
                 )
                 self._send_response(200, response)
 
-            elif parsed_path.path == '/v1/workflows':
-                # Execute a multi-step agent workflow.
-                # Body: { "name": str, "steps": [{"agent_id": str, "task": str}],
-                #         "parallel": bool }
-                from . import _agent_registry
-                import concurrent.futures as _cf
-                steps = body.get('steps', [])
-                parallel = bool(body.get('parallel', False))
-
-                if not steps:
-                    self._send_response(400, {"error": "Workflow 'steps' array is required"})
-                    return
-
-                workflow_name = body.get('name', 'unnamed-workflow')
-                results = []
-
-                def _run_step(step):
-                    aid = step.get('agent_id', '')
-                    task = step.get('task', '')
-                    out = _agent_registry.execute_agent(aid, task)
-                    return {"agent_id": aid, "task": task, "result": out}
-
-                if parallel:
-                    with _cf.ThreadPoolExecutor(max_workers=min(len(steps), 8)) as ex:
-                        futures = [ex.submit(_run_step, s) for s in steps]
-                        results = [f.result() for f in futures]  # preserve submission order
-                else:
-                    for step in steps:
-                        results.append(_run_step(step))
-
-                self._send_response(200, {
-                    "object": "workflow.result",
-                    "name": workflow_name,
-                    "parallel": parallel,
-                    "steps_executed": len(results),
-                    "results": results,
-                })
-
             else:
                 self._send_response(404, {"error": "Endpoint not found"})
 
@@ -1112,15 +917,11 @@ def run_server(host: str = "0.0.0.0", port: int = 8000):
     print("  GET  /              Web chat UI (browser)")
     print("  GET  /ui            Web chat UI (browser, alias)")
     print("  GET  /ui/providers  Provider metadata (JSON)")
-    print("  GET  /dashboard     Real-time execution dashboard (browser)")
-    print("  GET  /events        SSE stream of execution events")
     print("  GET  /health")
     print("  GET  /v1/models")
     print("  GET  /v1/models/<model-id>")
     print("  GET  /v1/capabilities")
     print("  GET  /v1/providers/capabilities?provider=<name>")
-    print("  GET  /v1/agents")
-    print("  GET  /v1/agents/<id>/check")
     print("  POST /v1/chat/completions")
     print("  POST /v1/completions")
     print("  POST /v1/images/generations")
@@ -1131,7 +932,6 @@ def run_server(host: str = "0.0.0.0", port: int = 8000):
     print("  POST /v1/synthesis/knowledge")
     print("  POST /v1/reflection/analyze")
     print("  POST /v1/agents/orchestrate")
-    print("  POST /v1/workflows")
     print("\nPass your API key via:  Authorization: Bearer <key>")
     print("Override provider via:  X-Provider: openai|anthropic|grok|gemini|openrouter|mistral|together|deepseek|perplexity")
     print("Override base URL via:  X-Base-URL: https://...")

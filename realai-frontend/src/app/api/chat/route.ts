@@ -1,11 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { ChatRequest } from "@/lib/realai";
 
-const BACKEND =
-  process.env.NEXT_PUBLIC_REALAI_API_BASE ?? "https://realai-qz3b.onrender.com";
+const RAW_BACKEND =
+  process.env.REALAI_API_BASE ??
+  process.env.NEXT_PUBLIC_REALAI_API_BASE ??
+  (process.env.NODE_ENV === "development" ? "http://localhost:8000" : "");
+
+function normalizeBackendBaseUrl(url: string): string {
+  const trimmed = url.trim().replace(/\/+$/, "");
+  return trimmed.endsWith("/v1") ? trimmed.slice(0, -3) : trimmed;
+}
+
+const BACKEND = normalizeBackendBaseUrl(RAW_BACKEND);
 
 export async function POST(req: NextRequest) {
   try {
+    if (!BACKEND) {
+      return NextResponse.json(
+        {
+          error:
+            "Backend URL is not configured. Set REALAI_API_BASE (preferred) or NEXT_PUBLIC_REALAI_API_BASE.",
+        },
+        { status: 500 }
+      );
+    }
+
     const body: ChatRequest = await req.json();
     const { messages, settings } = body;
 
@@ -39,12 +58,30 @@ export async function POST(req: NextRequest) {
       }),
     });
 
-    const data = await backendRes.json();
+    const raw = await backendRes.text();
+    let data: any = null;
+    try {
+      data = raw ? JSON.parse(raw) : null;
+    } catch {
+      data = null;
+    }
 
     if (!backendRes.ok) {
       return NextResponse.json(
-        { error: data?.error?.message ?? "Backend error" },
+        {
+          error:
+            data?.error?.message ??
+            (typeof data?.error === "string" ? data.error : null) ??
+            `Backend error (${backendRes.status})`,
+        },
         { status: backendRes.status }
+      );
+    }
+
+    if (!data) {
+      return NextResponse.json(
+        { error: "Backend returned non-JSON response." },
+        { status: 502 }
       );
     }
 

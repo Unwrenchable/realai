@@ -2,8 +2,5 @@
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
   "framework": "nextjs",
-  "regions": ["iad1"],
-  "env": {
-    "NEXT_PUBLIC_REALAI_API_BASE": "https://realai-qz3b.onrender.com"
-  }
+  "regions": ["iad1"]
 }

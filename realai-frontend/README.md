@@ -1,6 +1,6 @@
 # RealAI Frontend
 
-A professional Next.js 15 chat interface for the [RealAI](https://realai-qz3b.onrender.com) backend.
+A professional Next.js 15 chat interface for a RealAI backend deployment.
 
 ## Features
 
@@ -34,7 +34,8 @@ Open [http://localhost:3000](http://localhost:3000).
 
 | Variable | Value |
 |---|---|
-| `NEXT_PUBLIC_REALAI_API_BASE` | `https://realai-qz3b.onrender.com` |
+| `REALAI_API_BASE` | `https://your-service.onrender.com` |
+| `NEXT_PUBLIC_REALAI_API_BASE` | `https://your-service.onrender.com` *(optional fallback)* |
 | `REALAI_API_KEY` | *(your backend API key, if required — stored server-side only)* |
 
 3. Deploy. The proxy route at `/api/chat` forwards requests to the Render backend, so API keys never reach the browser.
@@ -44,7 +45,15 @@ Open [http://localhost:3000](http://localhost:3000).
 | Variable | Required | Description |
 |---|---|---|
 | `NEXT_PUBLIC_REALAI_API_BASE` | Yes | Base URL of the RealAI backend |
+| `REALAI_API_BASE` | Recommended | Server-side base URL of the RealAI backend |
 | `REALAI_API_KEY` | No | Server-side API key forwarded to the backend |
+
+## Troubleshooting Vercel + Render
+
+- Set Vercel project Root Directory to `realai-frontend`.
+- Do not include `/v1` in backend env URLs. Use `https://your-backend.onrender.com`.
+- Confirm Render health endpoint returns 200 at `/health`.
+- If Vercel builds fail with Next.js peer dependency errors, make sure lockfile and package versions are in sync.
 
 ## Architecture
 

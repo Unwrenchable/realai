@@ -1,3 +1,0 @@
-# Requirements for Lambda Core Handler
-# Handles: health, models, capabilities endpoints
-requests>=2.28.0

@@ -1,64 +1,101 @@
 # RealAI Frontend
 
-A professional Next.js 15 chat interface for a RealAI backend deployment.
+A professional Next.js 15 chat interface for RealAI.
 
 ## Features
 
 - 💬 **Full chat UI** — streaming-style responses, markdown rendering, code blocks
 - 🔄 **Conversation history** — persisted in localStorage, grouped by date
-- 🧠 **Model selector** — RealAI 2.0, GPT-4o, Claude 3.5 Sonnet, Mistral Large, and more
+- 🧠 **Model selector** — RealAI 2.0, GPT-4o, Claude 3.5 Sonnet, Gemini, and more
 - ⚙️ **Settings drawer** — system prompt, temperature slider, max tokens, optional API key
 - 📱 **Responsive** — collapsible sidebar, works on mobile
-- 🌑 **Dark mode** — slate/indigo design system, zero flash
+- 🌑 **Dark mode** — slate/indigo design system
 
-## Getting Started
+## Quick Start (local)
 
 ```bash
-# 1. Install dependencies
 npm install
-
-# 2. Configure environment
-cp .env.local.example .env.local
-# Edit .env.local and set NEXT_PUBLIC_REALAI_API_BASE if needed
-
-# 3. Run locally
+cp .env.local.example .env.local   # edit and fill in REALAI_API_BASE + REALAI_API_KEY
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
 
-## Deploy to Vercel
+---
 
-1. Create a **new** Vercel project and point it at the `realai-frontend` subdirectory of this repository.
-2. Add the following environment variables in the Vercel dashboard:
+## Deploy to Vercel (full-stack — no separate backend needed)
 
-| Variable | Value |
-|---|---|
-| `REALAI_API_BASE` | `https://your-service.onrender.com` |
-| `NEXT_PUBLIC_REALAI_API_BASE` | `https://your-service.onrender.com` *(optional fallback)* |
-| `REALAI_API_KEY` | *(your backend API key, if required — stored server-side only)* |
+This is the **recommended** deployment. The Next.js `/api/chat` route runs as a
+Vercel serverless function and proxies requests directly to any OpenAI-compatible
+API, so you need only one Vercel project.
 
-3. Deploy. The proxy route at `/api/chat` forwards requests to the Render backend, so API keys never reach the browser.
+### Step 1 — Import the repository on Vercel
 
-## Environment Variables
+1. Go to [vercel.com/new](https://vercel.com/new) and import this repository.
+2. In the **Root Directory** field, enter `realai-frontend`.
+3. Leave all other build settings at their defaults.
 
-| Variable | Required | Description |
+### Step 2 — Add environment variables
+
+In the Vercel project → **Settings → Environment Variables** add:
+
+| Variable | Example value | Notes |
 |---|---|---|
-| `NEXT_PUBLIC_REALAI_API_BASE` | Yes | Base URL of the RealAI backend |
-| `REALAI_API_BASE` | Recommended | Server-side base URL of the RealAI backend |
-| `REALAI_API_KEY` | No | Server-side API key forwarded to the backend |
+| `REALAI_API_BASE` | `https://openrouter.ai/api` | Base URL of any OpenAI-compatible API (no trailing `/v1`) |
+| `REALAI_API_KEY` | `sk-or-v1-...` | Your API key — stored server-side, never sent to the browser |
 
-## Troubleshooting Vercel + Render
+**Which provider should I use?**
 
-- Set Vercel project Root Directory to `realai-frontend`.
-- Do not include `/v1` in backend env URLs. Use `https://your-backend.onrender.com`.
-- Confirm Render health endpoint returns 200 at `/health`.
-- If Vercel builds fail with Next.js peer dependency errors, make sure lockfile and package versions are in sync.
+| Goal | `REALAI_API_BASE` | Key |
+|---|---|---|
+| GPT-4o, Claude, Gemini, Mistral all in one | `https://openrouter.ai/api` | [openrouter.ai/keys](https://openrouter.ai/keys) |
+| OpenAI only | `https://api.openai.com` | [platform.openai.com](https://platform.openai.com) |
+| Self-hosted Python backend | `https://your-service.onrender.com` | *(from your backend)* |
+
+### Step 3 — Deploy
+
+Click **Deploy**. That's it — both the chat UI and the API route run on Vercel.
+
+---
+
+## Self-hosted Python Backend (optional)
+
+If you want to run the Python API server yourself (adds extra features like
+provider auto-detection and the built-in chat UI):
+
+```bash
+# From the repo root
+pip install -r requirements.txt
+python -m realai.api_server   # listens on :8000 by default
+```
+
+Then set `REALAI_API_BASE=http://localhost:8000` (or your server's URL) in your
+`.env.local` or Vercel env vars.
+
+The Python backend can also be deployed to **Render** using the included
+`render.yaml`.
+
+---
 
 ## Architecture
 
 ```
-Browser → /api/chat (Next.js proxy) → https://realai-qz3b.onrender.com/v1/chat/completions
+Browser
+  │
+  └─► /api/chat  (Next.js serverless function on Vercel)
+          │
+          └─► REALAI_API_BASE/v1/chat/completions
+                  │
+                  ├─► https://openrouter.ai/api  (recommended)
+                  ├─► https://api.openai.com
+                  └─► https://your-service.onrender.com  (self-hosted)
 ```
 
-The proxy avoids CORS issues and keeps the API key server-side (never exposed in browser network traffic).
+API keys never reach the browser — they stay in the serverless function.
+
+## Troubleshooting
+
+- **"Backend URL is not configured"** — make sure `REALAI_API_BASE` is set in Vercel env vars and that you re-deployed after adding it.
+- **"Cannot auto-detect provider"** — if using the self-hosted Python backend, select your provider in the Settings drawer or pass `X-Provider` header.
+- **Vercel Root Directory** — must be set to `realai-frontend`, not the repo root.
+- **No trailing `/v1`** — `REALAI_API_BASE` should be the base origin only (e.g. `https://openrouter.ai/api`, not `https://openrouter.ai/api/v1`).

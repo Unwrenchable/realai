@@ -28,7 +28,7 @@ response = client.chat.create(
 # Powered by YOUR local AI model! 🎉
 ```
 
-**[📖 Local AI Setup Guide](LOCAL_AI_GUIDE.md)** - Be your own AI in 5 minutes!
+**[📖 See QUICKSTART.md for full local AI setup](QUICKSTART.md)**
 
 ### Why Run Your Own AI?
 
@@ -545,7 +545,7 @@ pip install pyinstaller
 cd realai
 
 # Build the executable
-pyinstaller realai_launcher.spec
+pyinstaller --onefile --windowed realai_gui.py --name RealAI
 
 # Output: dist\RealAI.exe — double-click to launch
 ```
@@ -717,7 +717,6 @@ See **[DEPLOYMENT.md](DEPLOYMENT.md)** for comprehensive deployment instructions
 - 🏠 **Local Development** - Quick setup for development and testing
 - 💻 **Desktop Application** - Windows .exe with GUI and built-in server
 - 🌐 **API Server** - Deploy on any server (VPS, cloud, on-premises)
-- ☁️ **AWS Lambda** - Serverless deployment with split architecture
 - 🔧 **Configuration** - Environment variables and provider setup
 - ✅ **Testing** - Verify your deployment
 - 🛠️ **Troubleshooting** - Common issues and solutions
@@ -734,17 +733,23 @@ python -m realai.api_server
 # or: python api_server.py
 ```
 
-**AWS Lambda (Serverless):**
+**Vercel (full-stack, recommended):**
+1. Import repo on [vercel.com/new](https://vercel.com/new)
+2. Set **Root Directory** → `realai-frontend`
+3. Add env vars: `REALAI_API_BASE=https://openrouter.ai/api` + `REALAI_API_KEY=sk-or-v1-...`
+4. Deploy — both the UI and the `/api/chat` serverless function run on Vercel.
+
+**Render (Python backend):**
 ```bash
-sam build
-sam deploy --guided
+# Configured via render.yaml — just connect your repo on render.com
 ```
 
 **Desktop App (Windows):**
 ```bash
 python realai_gui.py
 # Or build standalone .exe:
-pyinstaller realai_launcher.spec
+pip install pyinstaller
+pyinstaller --onefile --windowed realai_gui.py --name RealAI
 ```
 
 For detailed instructions, see **[DEPLOYMENT.md](DEPLOYMENT.md)**.

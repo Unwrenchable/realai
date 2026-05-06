@@ -1,3 +1,0 @@
-# Requirements for Lambda Image Handler
-# Handles: image generation
-requests>=2.28.0

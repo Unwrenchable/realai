@@ -176,12 +176,12 @@ Quick setup for local development or testing.
 export REALAI_OPENAI_API_KEY=sk-...
 
 # Start the server (default port 8000)
-python -m realai.api_server
-# or (legacy, still works)
 python api_server.py
+# or using the module (also works)
+python -m realai.api_server
 
 # Custom port (use PORT env var)
-PORT=8080 python -m realai.api_server
+PORT=8080 python api_server.py
 ```
 
 ### Production Server
@@ -290,7 +290,37 @@ sudo certbot --nginx -d api.yourdomain.com
 
 ---
 
-## AWS Lambda Deployment
+## Render Deployment
+
+Deploy the backend API server as a Render Web Service.
+
+### Configuration
+
+The `render.yaml` in this repository is pre-configured for Render:
+
+```yaml
+startCommand: python api_server.py
+```
+
+**Important notes:**
+- **Do not set `PORT`** in `render.yaml` or the Render dashboard. Render automatically injects the `PORT` environment variable; hardcoding it can cause a mismatch and the port scan will fail.
+- The server reads `PORT` from the environment and binds to `0.0.0.0:$PORT`, which is what Render requires.
+- Health checks are configured at `/health`.
+
+### Steps
+
+1. Connect your GitHub repository to Render.
+2. Create a **Web Service** and point it at the repo root.
+3. Render will use `render.yaml` automatically, or configure manually:
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `python api_server.py`
+   - **Environment Variable**: `PYTHON_VERSION=3.11`
+4. Add any required provider API keys (e.g. `REALAI_OPENAI_API_KEY`) as environment variables in the Render dashboard.
+5. Deploy. The service will bind to Render's assigned port and the `/health` endpoint will confirm it is running.
+
+---
+
+
 
 Serverless deployment using AWS Lambda with optimized, split architecture.
 
@@ -580,8 +610,17 @@ lsof -i :8000  # Linux/Mac
 netstat -ano | findstr :8000  # Windows
 
 # Kill process or use different port (use PORT env var)
-PORT=8080 python -m realai.api_server
+PORT=8080 python api_server.py
 ```
+
+#### Render: "Port scan timeout, no open ports detected"
+
+**Problem:** Render web service exits early or never binds to a port.
+
+**Solution:**
+- Ensure the start command is `python api_server.py` (not `python -m realai.api_server`).
+- Do **not** set `PORT` as an environment variable in `render.yaml` or the Render dashboard. Render injects `PORT` automatically; hardcoding it can cause a mismatch.
+- Check Render deploy logs for a Python traceback immediately after `==> Application exited early`.
 
 #### Lambda deployment fails
 

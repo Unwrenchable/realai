@@ -92,6 +92,8 @@ nothing else needs to be installed on the target machine.
 export REALAI_OPENAI_API_KEY=sk-...
 
 # Start the server
+python -m realai.api_server
+# or (legacy, still works)
 python api_server.py
 ```
 

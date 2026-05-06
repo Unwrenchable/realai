@@ -1,3 +1,33 @@
+Metadata-Version: 2.4
+Name: realai
+Version: 2.0.0
+Summary: The limitless AI that can truly do anything - from Web3 to groceries, therapy to business building
+Home-page: https://github.com/Unwrenchable/realai
+Author: RealAI Team
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.7
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Dynamic: author
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: home-page
+Dynamic: license-file
+Dynamic: requires-python
+Dynamic: summary
+
 # RealAI - The Limitless AI That Can Do Anything
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -587,8 +617,6 @@ export REALAI_OPENAI_API_KEY=sk-...            # OpenAI
 # export REALAI_PERPLEXITY_API_KEY=pplx-...   # Perplexity AI
 
 # Start the server (default: port 8000, all interfaces)
-python -m realai.api_server
-# or (legacy, still works)
 python api_server.py
 ```
 
@@ -730,8 +758,7 @@ git clone https://github.com/Unwrenchable/realai.git
 cd realai
 pip install -e .
 export REALAI_OPENAI_API_KEY=sk-...
-python -m realai.api_server
-# or: python api_server.py
+python api_server.py
 ```
 
 **AWS Lambda (Serverless):**

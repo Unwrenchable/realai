@@ -1,7 +1,7 @@
 {
   "interactions": [
     {
-      "timestamp": 1777558107,
+      "timestamp": 1777634645,
       "data": {
         "test": "data"
       },
@@ -9,41 +9,7 @@
       "adaptations": []
     },
     {
-      "timestamp": 1777558202,
-      "data": {
-        "messages": [
-          {
-            "role": "user",
-            "content": "Hello"
-          }
-        ]
-      },
-      "patterns": [
-        "Concise questions"
-      ],
-      "adaptations": [
-        "Keep responses focused"
-      ]
-    },
-    {
-      "timestamp": 1777558227,
-      "data": {
-        "messages": [
-          {
-            "role": "user",
-            "content": "Hello"
-          }
-        ]
-      },
-      "patterns": [
-        "Concise questions"
-      ],
-      "adaptations": [
-        "Keep responses focused"
-      ]
-    },
-    {
-      "timestamp": 1777558573,
+      "timestamp": 1777634797,
       "data": {
         "test": "data"
       },
@@ -51,48 +17,7 @@
       "adaptations": []
     },
     {
-      "timestamp": 1777558585,
-      "data": {
-        "user_preferences": {
-          "response_style": "concise",
-          "technical_level": "advanced",
-          "topics_of_interest": [
-            "AI",
-            "quantum computing",
-            "startups"
-          ]
-        },
-        "context": "User is a technical founder",
-        "feedback": "positive"
-      },
-      "patterns": [],
-      "adaptations": []
-    },
-    {
-      "timestamp": 1777558618,
-      "data": {
-        "messages": [
-          {
-            "role": "user",
-            "content": "I need help organizing my schedule better"
-          },
-          {
-            "role": "assistant",
-            "content": "I'll help you optimize your time management"
-          }
-        ],
-        "context": "Productivity improvement",
-        "outcome": "successful"
-      },
-      "patterns": [
-        "Concise questions"
-      ],
-      "adaptations": [
-        "Keep responses focused"
-      ]
-    },
-    {
-      "timestamp": 1777558705,
+      "timestamp": 1777636121,
       "data": {
         "test": "data"
       },
@@ -100,7 +25,7 @@
       "adaptations": []
     },
     {
-      "timestamp": 1777559379,
+      "timestamp": 1777646657,
       "data": {
         "test": "data"
       },
@@ -108,7 +33,7 @@
       "adaptations": []
     },
     {
-      "timestamp": 1777559445,
+      "timestamp": 1777646704,
       "data": {
         "test": "data"
       },
@@ -116,7 +41,7 @@
       "adaptations": []
     },
     {
-      "timestamp": 1777560041,
+      "timestamp": 1777647339,
       "data": {
         "test": "data"
       },
@@ -124,7 +49,7 @@
       "adaptations": []
     },
     {
-      "timestamp": 1777560813,
+      "timestamp": 1777647422,
       "data": {
         "test": "data"
       },
@@ -132,7 +57,7 @@
       "adaptations": []
     },
     {
-      "timestamp": 1777561190,
+      "timestamp": 1777660367,
       "data": {
         "test": "data"
       },
@@ -140,7 +65,7 @@
       "adaptations": []
     },
     {
-      "timestamp": 1777563086,
+      "timestamp": 1777660508,
       "data": {
         "test": "data"
       },
@@ -148,7 +73,7 @@
       "adaptations": []
     },
     {
-      "timestamp": 1777563266,
+      "timestamp": 1777660920,
       "data": {
         "test": "data"
       },
@@ -156,143 +81,7 @@
       "adaptations": []
     },
     {
-      "timestamp": 1777567433,
-      "data": {
-        "test": "data"
-      },
-      "patterns": [],
-      "adaptations": []
-    },
-    {
-      "timestamp": 1777567610,
-      "data": {
-        "test": "data"
-      },
-      "patterns": [],
-      "adaptations": []
-    },
-    {
-      "timestamp": 1777568041,
-      "data": {
-        "test": "data"
-      },
-      "patterns": [],
-      "adaptations": []
-    },
-    {
-      "timestamp": 1777568082,
-      "data": {
-        "test": "data"
-      },
-      "patterns": [],
-      "adaptations": []
-    },
-    {
-      "timestamp": 1777568227,
-      "data": {
-        "test": "data"
-      },
-      "patterns": [],
-      "adaptations": []
-    },
-    {
-      "timestamp": 1777568608,
-      "data": {
-        "test": "data"
-      },
-      "patterns": [],
-      "adaptations": []
-    },
-    {
-      "timestamp": 1777568616,
-      "data": {
-        "test": "data"
-      },
-      "patterns": [],
-      "adaptations": []
-    },
-    {
-      "timestamp": 1777568665,
-      "data": {
-        "test": "data"
-      },
-      "patterns": [],
-      "adaptations": []
-    },
-    {
-      "timestamp": 1777568753,
-      "data": {
-        "test": "data"
-      },
-      "patterns": [],
-      "adaptations": []
-    },
-    {
-      "timestamp": 1777569178,
-      "data": {
-        "test": "data"
-      },
-      "patterns": [],
-      "adaptations": []
-    },
-    {
-      "timestamp": 1777569284,
-      "data": {
-        "test": "data"
-      },
-      "patterns": [],
-      "adaptations": []
-    },
-    {
-      "timestamp": 1777569312,
-      "data": {
-        "test": "data"
-      },
-      "patterns": [],
-      "adaptations": []
-    },
-    {
-      "timestamp": 1777569641,
-      "data": {
-        "test": "data"
-      },
-      "patterns": [],
-      "adaptations": []
-    },
-    {
-      "timestamp": 1777569658,
-      "data": {
-        "test": "data"
-      },
-      "patterns": [],
-      "adaptations": []
-    },
-    {
-      "timestamp": 1777569725,
-      "data": {
-        "test": "data"
-      },
-      "patterns": [],
-      "adaptations": []
-    },
-    {
-      "timestamp": 1777569859,
-      "data": {
-        "test": "data"
-      },
-      "patterns": [],
-      "adaptations": []
-    },
-    {
-      "timestamp": 1777569867,
-      "data": {
-        "test": "data"
-      },
-      "patterns": [],
-      "adaptations": []
-    },
-    {
-      "timestamp": 1777569869,
+      "timestamp": 1777804972,
       "data": {
         "test": "data"
       },
@@ -308,12 +97,6 @@
       "adaptations": []
     }
   ],
-  "patterns": {
-    "Concise questions": 3
-  },
-  "adaptations": [
-    "Keep responses focused",
-    "Keep responses focused",
-    "Keep responses focused"
-  ]
+  "patterns": {},
+  "adaptations": []
 }

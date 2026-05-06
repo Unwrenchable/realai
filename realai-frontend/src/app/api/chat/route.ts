@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
 
     // Build the message array, optionally prepending the system prompt.
     const allMessages =
-      settings.systemPrompt.trim()
+      settings.systemPrompt?.trim()
         ? [
             { role: "system", content: settings.systemPrompt.trim() },
             ...messages,

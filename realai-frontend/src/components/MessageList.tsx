@@ -154,7 +154,7 @@ export default function MessageList({ messages }: MessageListProps) {
             How can I help you today?
           </h2>
           <p className="text-sm text-slate-500 max-w-xs">
-            Ask anything — I can chat, write code, analyse images, search the
+            Ask anything — I can chat, write code, analyze images, search the
             web, and much more.
           </p>
         </div>

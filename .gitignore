@@ -25,6 +25,7 @@ realai_memory.json
 
 # Build / packaging artifacts
 *.egg-info/
+node_modules/
 dist/
 build/
 *.egg

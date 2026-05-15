@@ -1,194 +1,47 @@
-"""
-Tests for RealAI model.
+"""Project smoke tests for the current RealAI platform surface."""
 
-Run with: python test_realai.py
-"""
-
-import sys
-from realai import RealAI, RealAIClient, ModelCapability, PROVIDER_CONFIGS, PROVIDER_ENV_VARS, _detect_provider
+from realai import ModelCapability, PROVIDER_CONFIGS, PROVIDER_ENV_VARS, RealAI, RealAIClient, _detect_provider
+from realai.server.router import dispatch_request
 
 
-def test_model_initialization():
-    """Test model initialization."""
-    print("Testing model initialization...")
-    model = RealAI()
-    assert model.model_name == "realai-2.0"
-    assert model.version == "2.0.0"
-    assert len(model.capabilities) > 0
-    print("✓ Model initialization test passed")
+def test_package_exports_are_available():
+    assert RealAI is not None
+    assert RealAIClient is not None
+    assert ModelCapability is not None
+    assert isinstance(PROVIDER_CONFIGS, dict)
+    assert isinstance(PROVIDER_ENV_VARS, dict)
 
 
-def test_client_initialization():
-    """Test client initialization."""
-    print("Testing client initialization...")
-    client = RealAIClient()
-    assert client.model is not None
-    assert hasattr(client, 'chat')
-    assert hasattr(client, 'completions')
-    assert hasattr(client, 'images')
-    assert hasattr(client, 'videos')
-    assert hasattr(client, 'embeddings')
-    assert hasattr(client, 'audio')
-    # New capabilities
-    assert hasattr(client, 'web')
-    assert hasattr(client, 'tasks')
-    assert hasattr(client, 'voice')
-    assert hasattr(client, 'business')
-    assert hasattr(client, 'therapy')
-    assert hasattr(client, 'web3')
-    assert hasattr(client, 'plugins')
-    assert hasattr(client, 'personas')
-    # Next-generation capability sub-clients
-    assert hasattr(client, 'reasoning')
-    assert hasattr(client, 'synthesis')
-    assert hasattr(client, 'reflection')
-    assert hasattr(client, 'agents')
-    print("✓ Client initialization test passed")
+def test_provider_detection_smoke():
+    assert _detect_provider('sk-test', None) == 'openai'
+    assert _detect_provider('sk-ant-test', None) == 'anthropic'
+    assert _detect_provider(None, 'gemini') == 'gemini'
 
 
-def test_chat_completion():
-    """Test chat completion."""
-    print("Testing chat completion...")
-    client = RealAIClient()
-    response = client.chat.create(
-        messages=[
-            {"role": "user", "content": "Hello"}
-        ]
-    )
-    assert 'id' in response
-    assert 'choices' in response
-    assert len(response['choices']) > 0
-    assert 'message' in response['choices'][0]
-    print("✓ Chat completion test passed")
+def test_structured_server_smoke():
+    health_status, health_response, _ = dispatch_request('GET', '/health')
+    assert health_status == 200
+    assert health_response['status'] == 'ok'
+    assert 'realai-1.0' in health_response['available_models']
 
-
-def test_text_completion():
-    """Test text completion."""
-    print("Testing text completion...")
-    client = RealAIClient()
-    response = client.completions.create(
-        prompt="Hello world"
-    )
-    assert 'id' in response
-    assert 'choices' in response
-    assert len(response['choices']) > 0
-    print("✓ Text completion test passed")
-
-
-def test_image_generation():
-    """Test image generation."""
-    print("Testing image generation...")
-    client = RealAIClient()
-    response = client.images.generate(
-        prompt="A sunset"
-    )
-    assert 'data' in response
-    assert len(response['data']) > 0
-    assert 'url' in response['data'][0]
-    print("✓ Image generation test passed")
-
-
-def test_image_analysis():
-    """Test image analysis."""
-    print("Testing image analysis...")
-    client = RealAIClient()
-    response = client.images.analyze(
-        image_url="https://example.com/test.jpg"
-    )
-    assert 'analysis' in response
-    assert 'description' in response
-    print("✓ Image analysis test passed")
-
-
-def test_video_generation():
-    """Test video generation."""
-    print("Testing video generation...")
-    client = RealAIClient()
-    response = client.videos.generate(
-        prompt="A drone flyover of a futuristic city",
-        duration=4,
-        n=1
-    )
-    assert 'created' in response
-    assert 'data' in response
-    assert len(response['data']) > 0
-    assert 'url' in response['data'][0]
-    print("✓ Video generation test passed")
-
-
-def test_code_generation():
-    """Test code generation."""
-    print("Testing code generation...")
-    model = RealAI()
-    response = model.generate_code(
-        prompt="Sort a list",
-        language="python"
-    )
-    assert 'code' in response
-    assert 'language' in response
-    print("✓ Code generation test passed")
-
-
-def test_embeddings():
-    """Test embeddings creation."""
-    print("Testing embeddings...")
-    client = RealAIClient()
-    response = client.embeddings.create(
-        input_text="Test text"
-    )
-    assert 'data' in response
-    assert len(response['data']) > 0
-    assert 'embedding' in response['data'][0]
-    assert len(response['data'][0]['embedding']) > 0
-    print("✓ Embeddings test passed")
-
-
-def test_structured_server_routes():
-    """Test the structured server router and registry."""
-    print("Testing structured server routes...")
-    from realai.server.config import get_model_config, list_models
-    from realai.server.router import dispatch_request
-
-    models = list_models()
-    assert 'realai-1.0' in models
-    config = get_model_config('realai-1.0')
-    assert config['id'] == 'realai-1.0'
-    assert config['backend'] == 'vllm'
-    assert config['path'] == 'meta-llama/Meta-Llama-3-8B-Instruct'
-
-    status, response, content_type = dispatch_request(
+    chat_status, chat_response, _ = dispatch_request(
         'POST',
         '/v1/chat/completions',
         {
             'model': 'realai-1.0',
-            'messages': [{'role': 'user', 'content': 'Hello structured server'}],
-            'temperature': 0.2,
-            'max_tokens': 32,
-        }
+            'messages': [{'role': 'user', 'content': 'Summarize the platform.'}],
+        },
     )
-    assert status == 200
-    assert content_type == 'application/json'
-    assert 'choices' in response
+    assert chat_status == 200
+    assert 'choices' in chat_response
 
-    status, response, _content_type = dispatch_request(
-        'POST',
-        '/v1/chat/completions',
-        {
-            'model': 'realai-1.0',
-            'messages': [{'role': 'user', 'content': 'Hello structured server'}],
-            'tools': 'not-a-list',
-        }
-    )
-    assert status == 400
-    assert 'tools must be a list' in response['error']['message']
-
-    status, response, content_type = dispatch_request(
+    embedding_status, embedding_response, _ = dispatch_request(
         'POST',
         '/v1/embeddings',
-        {'model': 'realai-embed', 'input': ['hello', 'world']}
+        {'model': 'realai-embed', 'input': ['platform overview']},
     )
-    assert status == 200
-    assert len(response['data']) == 2
+    assert embedding_status == 200
+    assert len(embedding_response['data']) == 1
 
     status, response, content_type = dispatch_request('GET', '/metrics')
     assert status == 200

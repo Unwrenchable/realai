@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from core.logging.logger import log
+from core.security.python_sandbox import PythonSandbox
 from core.tracing.tracer import tracer
 from core.tools.credentials import ToolCredentialManager
 
@@ -43,6 +44,8 @@ class ToolExecutionResult:
     duration_ms: float = 0.0
     rolled_back: bool = False
     dependencies: List[str] = field(default_factory=list)
+    sandboxed: bool = False
+    sandbox_type: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize the execution result."""
@@ -58,6 +61,8 @@ class ToolExecutionResult:
             "duration_ms": self.duration_ms,
             "rolled_back": self.rolled_back,
             "dependencies": list(self.dependencies),
+            "sandboxed": self.sandboxed,
+            "sandbox_type": self.sandbox_type,
         }
 
 
@@ -77,6 +82,8 @@ class ToolExecutionAuditRecord:
     output_summary: str = ""
     credentials: List[Dict[str, Any]] = field(default_factory=list)
     dependencies: List[str] = field(default_factory=list)
+    sandboxed: bool = False
+    sandbox_type: str = ""
 
 
 class ToolExecutionEngine:
@@ -213,12 +220,16 @@ class ToolExecutionEngine:
         audit_credentials = self._audit_credentials(request.tool_name, runtime_context)
         retry_count = int(request.max_retries if request.max_retries is not None else self.max_retries)
         total_attempts = retry_count + 1
+        sandboxed = self._uses_sandbox(tool)
+        sandbox_type = str(getattr(tool, "sandbox_type", "python" if sandboxed else ""))
 
         log("tool.execution.start", {
             "tool": request.tool_name,
             "request_id": request.request_id,
             "dependencies": request.depends_on,
             "credentials": audit_credentials,
+            "sandboxed": sandboxed,
+            "sandbox_type": sandbox_type,
         })
 
         for attempt in range(1, total_attempts + 1):
@@ -260,6 +271,8 @@ class ToolExecutionEngine:
             duration_ms=(finished_at - started_at) * 1000.0,
             rolled_back=rolled_back,
             dependencies=list(request.depends_on),
+            sandboxed=sandboxed,
+            sandbox_type=sandbox_type,
         )
         self._record_audit(result, request.arguments, audit_credentials)
         log("tool.execution.finish", {
@@ -269,6 +282,8 @@ class ToolExecutionEngine:
             "attempts": result.attempts,
             "rolled_back": result.rolled_back,
             "error": result.error,
+            "sandboxed": result.sandboxed,
+            "sandbox_type": result.sandbox_type,
         })
         return result
 
@@ -320,6 +335,9 @@ class ToolExecutionEngine:
         runtime_context: Dict[str, Any],
         timeout_seconds: int,
     ) -> Any:
+        if self._uses_sandbox(tool):
+            return self._invoke_in_sandbox(tool, arguments, runtime_context, timeout_seconds)
+
         outcome: Dict[str, Any] = {}
         error_holder: List[Exception] = []
 
@@ -340,10 +358,41 @@ class ToolExecutionEngine:
             raise error_holder[0]
         return outcome.get("result")
 
-    def _should_retry(self, exc: Exception, attempt: int, max_retries: int) -> bool:
+    def _should_retry(self, exc: Exception, attempt: int, total_attempts: int) -> bool:
         if isinstance(exc, (PermissionError, ValueError)):
             return False
-        return attempt < max_retries
+        return attempt < total_attempts
+
+    def _uses_sandbox(self, tool: Any) -> bool:
+        return bool(getattr(tool, "requires_sandbox", False))
+
+    def _invoke_in_sandbox(
+        self,
+        tool: Any,
+        arguments: Dict[str, Any],
+        runtime_context: Dict[str, Any],
+        timeout_seconds: int,
+    ) -> Any:
+        sandbox = getattr(tool, "sandbox", None)
+        if sandbox is None or not hasattr(sandbox, "run"):
+            sandbox = PythonSandbox(
+                timeout_seconds=timeout_seconds,
+                allowed_imports=getattr(tool, "allowed_imports", ()),
+            )
+        if hasattr(sandbox, "timeout_seconds"):
+            sandbox.timeout_seconds = max(1, int(timeout_seconds))
+        build_script = getattr(tool, "build_sandbox_script", None)
+        if callable(build_script):
+            code = build_script(arguments=dict(arguments or {}), context=dict(runtime_context))
+        else:
+            code = arguments.get("code")
+        if not isinstance(code, str) or not code.strip():
+            raise ValueError("Sandboxed tool requires executable code")
+        parse_result = getattr(tool, "parse_sandbox_result", None)
+        sandbox_result = sandbox.run(code)
+        if callable(parse_result):
+            return parse_result(sandbox_result)
+        return sandbox_result
 
     def _rollback(
         self,
@@ -402,4 +451,6 @@ class ToolExecutionEngine:
             output_summary=str(result.output)[:200],
             credentials=list(credentials),
             dependencies=list(result.dependencies),
+            sandboxed=result.sandboxed,
+            sandbox_type=result.sandbox_type,
         ))

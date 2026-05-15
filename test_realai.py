@@ -502,10 +502,10 @@ def test_week7_tool_executor_credentials_and_parallel_dependencies():
             name = kwargs.get("name")
             if name == "alpha":
                 sync["alpha_started"].set()
-                assert sync["beta_started"].wait(0.5)
+                assert sync["beta_started"].wait(0.5), "beta did not start in time"
             elif name == "beta":
                 sync["beta_started"].set()
-                assert sync["alpha_started"].wait(0.5)
+                assert sync["alpha_started"].wait(0.5), "alpha did not start in time"
             credentials = context.get("tool_credentials", [])
             dependency_results = context.get("dependency_results", {})
             outputs.append((name, dependency_results))
@@ -559,6 +559,53 @@ def test_week7_tool_executor_credentials_and_parallel_dependencies():
     assert credential_entry.credentials[0]["alias"] == "calendar-key"
     assert "super-secret-token" not in str(credential_entry.credentials)
     print("✓ Week-7 tool executor credentials and parallel dependency test passed")
+
+
+def test_week7_tool_executor_sandbox_enforcement():
+    """Test sandbox-required tools run in the Python sandbox instead of inline."""
+    from core.tools.registry import ToolRegistry
+    from core.security.python_sandbox import PythonSandbox
+
+    class _SandboxedTool:
+        name = "sandboxed_tool"
+        description = "Sandboxed execution test tool"
+        params_schema = {"mode": {"type": "string"}}
+        permissions = []
+        requires_sandbox = True
+        sandbox_type = "python"
+
+        def __init__(self):
+            self.inline_calls = 0
+            self.sandbox = PythonSandbox(timeout_seconds=1)
+
+        def __call__(self, **kwargs):
+            self.inline_calls += 1
+            raise AssertionError("inline execution should not run")
+
+        def build_sandbox_script(self, arguments=None, context=None):
+            mode = (arguments or {}).get("mode", "safe")
+            if mode == "blocked":
+                return "open('blocked.txt', 'w').write('x')"
+            return "print('sandboxed tool executor')"
+
+    registry = ToolRegistry()
+    tool = _SandboxedTool()
+    registry.register(tool)
+
+    safe = registry.execute_tool("sandboxed_tool", {"mode": "safe"}, context={})
+    blocked = registry.execute_tool("sandboxed_tool", {"mode": "blocked"}, context={})
+
+    assert safe["sandboxed"] is True
+    assert "sandboxed tool executor" in safe["stdout"]
+    assert blocked["sandboxed"] is True
+    assert "PermissionError" in blocked.get("stderr", "") or blocked.get("returncode", 0) != 0
+    assert tool.inline_calls == 0
+
+    audit_entry = next((entry for entry in registry.get_audit_log() if entry.tool_name == "sandboxed_tool"), None)
+    assert audit_entry is not None
+    assert audit_entry.sandboxed is True
+    assert audit_entry.sandbox_type == "python"
+    print("✓ Week-7 tool executor sandbox enforcement test passed")
 
 
 def test_week7_agent_safety_limits():
@@ -3517,6 +3564,7 @@ def run_all_tests():
         test_week7_tool_permission_enforcement,
         test_week7_tool_executor_retry_and_rollback,
         test_week7_tool_executor_credentials_and_parallel_dependencies,
+        test_week7_tool_executor_sandbox_enforcement,
         test_week7_agent_safety_limits,
         test_week7_web3_policy,
         test_week7_tool_call_validation,

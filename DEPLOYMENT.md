@@ -292,31 +292,35 @@ sudo certbot --nginx -d api.yourdomain.com
 
 ## Render Deployment
 
-Deploy the backend API server as a Render Web Service.
+Deploy the frontend as a Render Static Site.
 
 ### Configuration
 
 The `render.yaml` in this repository is pre-configured for Render:
 
 ```yaml
-startCommand: python api_server.py
+services:
+  - type: static
+    rootDir: apps/frontend
+    buildCommand: npm install --no-package-lock && npm run build
+    publishPath: out
 ```
 
 **Important notes:**
-- **Do not set `PORT`** in `render.yaml` or the Render dashboard. Render automatically injects the `PORT` environment variable; hardcoding it can cause a mismatch and the port scan will fail.
-- The server reads `PORT` from the environment and binds to `0.0.0.0:$PORT`, which is what Render requires.
-- Health checks are configured at `/health`.
+- Set `NEXT_PUBLIC_REALAI_API_BASE` in Render to your Vercel backend origin.
+- Do **not** include a trailing `/v1` in `NEXT_PUBLIC_REALAI_API_BASE`; the frontend appends `/v1/chat/completions`.
+- The static export is generated into `apps/frontend/out`.
 
 ### Steps
 
 1. Connect your GitHub repository to Render.
-2. Create a **Web Service** and point it at the repo root.
+2. Create a **Static Site**.
 3. Render will use `render.yaml` automatically, or configure manually:
-   - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `python api_server.py`
-   - **Environment Variable**: `PYTHON_VERSION=3.11`
-4. Add any required provider API keys (e.g. `REALAI_OPENAI_API_KEY`) as environment variables in the Render dashboard.
-5. Deploy. The service will bind to Render's assigned port and the `/health` endpoint will confirm it is running.
+   - **Root Directory**: `apps/frontend`
+   - **Build Command**: `npm install --no-package-lock && npm run build`
+   - **Publish Directory**: `out`
+4. Add `NEXT_PUBLIC_REALAI_API_BASE=https://your-backend.vercel.app` in the Render dashboard.
+5. Deploy. Render will publish the static frontend from `out/`.
 
 ---
 

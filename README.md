@@ -73,6 +73,19 @@ pnpm install
 pnpm --filter realai-frontend dev
 ```
 
+**Vercel (Python backend):**
+1. Import repo on [vercel.com/new](https://vercel.com/new)
+2. Set **Framework Preset** → `Other` or `Python`
+3. Leave **Root Directory** at the repo root so Vercel picks up `vercel.json`, `api/index.py`, and `requirements.txt`
+4. Add backend env vars in Vercel
+5. Deploy — the backend serves `/health` and `/v1/chat/completions`
+
+**Render (static frontend):**
+1. Connect the repo on Render
+2. Use the included `render.yaml`
+3. Set `NEXT_PUBLIC_REALAI_API_BASE=https://your-vercel-backend.vercel.app`
+4. Deploy the `apps/frontend` static site
+
 ### Python SDK
 
 ```python

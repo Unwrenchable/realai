@@ -427,7 +427,7 @@ def test_week7_tool_permission_enforcement():
 
 
 def test_week7_tool_executor_retry_and_rollback():
-    """Test retry and rollback behaviour in the core tool execution engine."""
+    """Test retry and rollback behavior in the core tool execution engine."""
     from core.tools.registry import ToolRegistry
 
     state = {"writes": []}
@@ -437,7 +437,7 @@ def test_week7_tool_executor_retry_and_rollback():
         description = "Transactional test tool"
         params_schema = {"action": {"type": "string"}}
         permissions = []
-        max_retries = 2
+        max_retries = 1
 
         def __init__(self):
             self.calls = 0

@@ -90,7 +90,7 @@ class ToolExecutionEngine:
         credential_manager: ToolCredentialManager = None,
     ) -> None:
         self.timeout_seconds = max(1, int(timeout_seconds))
-        self.max_retries = max(1, int(max_retries))
+        self.max_retries = max(0, int(max_retries))
         self.max_parallel = max(1, int(max_parallel))
         self.credential_manager = credential_manager or ToolCredentialManager()
         self._audit_log: List[ToolExecutionAuditRecord] = []
@@ -211,6 +211,8 @@ class ToolExecutionEngine:
         status = "error"
         rolled_back = False
         audit_credentials = self._audit_credentials(request.tool_name, runtime_context)
+        retry_count = int(request.max_retries if request.max_retries is not None else self.max_retries)
+        total_attempts = retry_count + 1
 
         log("tool.execution.start", {
             "tool": request.tool_name,
@@ -219,7 +221,7 @@ class ToolExecutionEngine:
             "credentials": audit_credentials,
         })
 
-        for attempt in range(1, int(request.max_retries or self.max_retries) + 1):
+        for attempt in range(1, total_attempts + 1):
             attempts = attempt
             try:
                 result_payload = self._invoke_with_timeout(
@@ -240,9 +242,9 @@ class ToolExecutionEngine:
                 error_message = str(exc)
                 status = "error"
                 rolled_back = self._rollback(tool, request.arguments, runtime_context, error_message) or rolled_back
-                if not self._should_retry(exc, attempt, int(request.max_retries or self.max_retries)):
+                if not self._should_retry(exc, attempt, total_attempts):
                     break
-            if attempt < int(request.max_retries or self.max_retries):
+            if attempt < total_attempts:
                 time.sleep(0.1 * attempt)
 
         finished_at = time.time()
@@ -309,7 +311,7 @@ class ToolExecutionEngine:
         return max(1, int(getattr(tool, "timeout_seconds", self.timeout_seconds)))
 
     def _tool_retries(self, tool: Any) -> int:
-        return max(1, int(getattr(tool, "max_retries", self.max_retries)))
+        return max(0, int(getattr(tool, "max_retries", self.max_retries)))
 
     def _invoke_with_timeout(
         self,

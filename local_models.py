@@ -15,6 +15,7 @@ import os
 import json
 import hashlib
 import threading
+import tempfile
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Union
 from enum import Enum
@@ -46,10 +47,22 @@ class LocalModelManager:
             models_dir: Directory to store models. Defaults to ~/.realai/models/
         """
         if models_dir is None:
-            models_dir = os.path.expanduser("~/.realai/models")
+            data_dir = os.environ.get("REALAI_DATA_DIR", "").strip()
+            explicit_models_dir = os.environ.get("REALAI_LOCAL_MODELS_DIR", "").strip()
+            if explicit_models_dir:
+                models_dir = explicit_models_dir
+            elif data_dir:
+                models_dir = os.path.join(data_dir, "models")
+            else:
+                models_dir = os.path.expanduser("~/.realai/models")
 
         self.models_dir = Path(models_dir)
-        self.models_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            self.models_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            fallback_root = Path(tempfile.gettempdir()) / "realai"
+            self.models_dir = fallback_root / "models"
+            self.models_dir.mkdir(parents=True, exist_ok=True)
 
         self.config_file = self.models_dir.parent / "local_models.json"
         self.config = self._load_config()

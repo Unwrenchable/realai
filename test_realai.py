@@ -426,6 +426,141 @@ def test_week7_tool_permission_enforcement():
     print("✓ Week-7 tool permission enforcement test passed")
 
 
+def test_week7_tool_executor_retry_and_rollback():
+    """Test retry and rollback behaviour in the core tool execution engine."""
+    from core.tools.registry import ToolRegistry
+
+    state = {"writes": []}
+
+    class _TransactionalTool:
+        name = "transactional_tool"
+        description = "Transactional test tool"
+        params_schema = {"action": {"type": "string"}}
+        permissions = []
+        max_retries = 2
+
+        def __init__(self):
+            self.calls = 0
+
+        def __call__(self, **kwargs):
+            self.calls += 1
+            action = kwargs.get("action")
+            if action == "retry_once" and self.calls == 1:
+                raise RuntimeError("transient failure")
+            if action == "fail_after_write":
+                state["writes"].append("pending")
+                raise RuntimeError("boom")
+            return {"calls": self.calls, "writes": list(state["writes"])}
+
+        def rollback(self, arguments=None, context=None, error=None):
+            if state["writes"]:
+                state["writes"].pop()
+
+    registry = ToolRegistry()
+    tool = _TransactionalTool()
+    registry.register(tool)
+
+    retried = registry.execute_tool("transactional_tool", {"action": "retry_once"}, context={})
+    assert retried["calls"] == 2
+
+    failed = False
+    try:
+        registry.execute_tool("transactional_tool", {"action": "fail_after_write"}, context={})
+    except RuntimeError as exc:
+        failed = "boom" in str(exc)
+    assert failed
+    assert state["writes"] == []
+
+    audit_log = registry.get_audit_log()
+    rollback_entry = next((entry for entry in audit_log if entry.rolled_back), None)
+    assert rollback_entry is not None
+    assert rollback_entry.tool_name == "transactional_tool"
+    print("✓ Week-7 tool executor retry and rollback test passed")
+
+
+def test_week7_tool_executor_credentials_and_parallel_dependencies():
+    """Test scoped credentials and dependency-aware parallel execution."""
+    import threading
+    from core.tools.registry import ToolRegistry
+    from core.tools.executor import ToolExecutionRequest
+
+    sync = {
+        "alpha_started": threading.Event(),
+        "beta_started": threading.Event(),
+    }
+    outputs = []
+
+    class _ParallelCredentialTool:
+        name = "parallel_credential_tool"
+        description = "Parallel credential tool"
+        params_schema = {"name": {"type": "string"}}
+        permissions = []
+        timeout_seconds = 2
+
+        def __call__(self, **kwargs):
+            context = kwargs.get("_context", {})
+            name = kwargs.get("name")
+            if name == "alpha":
+                sync["alpha_started"].set()
+                assert sync["beta_started"].wait(0.5)
+            elif name == "beta":
+                sync["beta_started"].set()
+                assert sync["alpha_started"].wait(0.5)
+            credentials = context.get("tool_credentials", [])
+            dependency_results = context.get("dependency_results", {})
+            outputs.append((name, dependency_results))
+            return {
+                "name": name,
+                "credentials": [credential["alias"] for credential in credentials],
+                "dependency_count": len(dependency_results),
+            }
+
+    registry = ToolRegistry()
+    registry.credential_manager.register_api_key(
+        alias="calendar-key",
+        secret="super-secret-token",
+        allowed_tools=["parallel_credential_tool"],
+        scopes=["calendar.read"],
+    )
+    registry.register(_ParallelCredentialTool())
+
+    plan = [
+        ToolExecutionRequest(
+            request_id="alpha",
+            tool_name="parallel_credential_tool",
+            arguments={"name": "alpha"},
+        ),
+        ToolExecutionRequest(
+            request_id="beta",
+            tool_name="parallel_credential_tool",
+            arguments={"name": "beta"},
+        ),
+        ToolExecutionRequest(
+            request_id="gamma",
+            tool_name="parallel_credential_tool",
+            arguments={"name": "gamma"},
+            depends_on=["alpha", "beta"],
+        ),
+    ]
+    results = registry.execute_plan(
+        plan,
+        context={"requested_scopes": {"parallel_credential_tool": ["calendar.read"]}},
+    )
+    assert results["alpha"]["status"] == "success"
+    assert results["beta"]["status"] == "success"
+    assert results["gamma"]["status"] == "success"
+    assert results["alpha"]["output"]["credentials"] == ["calendar-key"]
+    assert results["gamma"]["output"]["dependency_count"] == 2
+    assert any(name == "gamma" and len(deps) == 2 for name, deps in outputs)
+
+    audit_log = registry.get_audit_log()
+    credential_entry = next((entry for entry in audit_log if entry.tool_name == "parallel_credential_tool"), None)
+    assert credential_entry is not None
+    assert credential_entry.credentials[0]["alias"] == "calendar-key"
+    assert "super-secret-token" not in str(credential_entry.credentials)
+    print("✓ Week-7 tool executor credentials and parallel dependency test passed")
+
+
 def test_week7_agent_safety_limits():
     """Test agent max-step safety enforcement."""
     print("Testing week-7 agent safety limits...")
@@ -3380,6 +3515,8 @@ def run_all_tests():
         test_week5_voice_registry_backends,
         test_week7_python_sandbox_security,
         test_week7_tool_permission_enforcement,
+        test_week7_tool_executor_retry_and_rollback,
+        test_week7_tool_executor_credentials_and_parallel_dependencies,
         test_week7_agent_safety_limits,
         test_week7_web3_policy,
         test_week7_tool_call_validation,

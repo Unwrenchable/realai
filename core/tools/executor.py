@@ -106,6 +106,10 @@ class ToolExecutionEngine:
         """Return recorded execution audit events."""
         return list(self._audit_log)
 
+    def _safe_dict_copy(self, value: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """Return a defensive copy of a dictionary-like value."""
+        return dict(value or {})
+
     def execute_tool(
         self,
         tool_name: str,
@@ -119,7 +123,7 @@ class ToolExecutionEngine:
         with tracer.start_as_current_span("tool.execute.{0}".format(tool_name)):
             request = ToolExecutionRequest(
                 tool_name=tool_name,
-                arguments=dict(arguments or {}),
+                arguments=self._safe_dict_copy(arguments),
                 request_id=request_id or "",
                 depends_on=list(dependencies or []),
                 timeout_seconds=self._tool_timeout(tool),
@@ -138,7 +142,7 @@ class ToolExecutionEngine:
         """Execute a dependency-aware batch of tool requests."""
         pending = {request.request_id: request for request in requests}
         results: Dict[str, ToolExecutionResult] = {}
-        shared_context = dict(context or {})
+        shared_context = self._safe_dict_copy(context)
 
         while pending:
             ready: List[ToolExecutionRequest] = []
@@ -185,7 +189,7 @@ class ToolExecutionEngine:
                         for dep in request.depends_on
                         if dep in results
                     }
-                    runtime_context = dict(shared_context)
+                    runtime_context = self._safe_dict_copy(shared_context)
                     runtime_context["dependency_results"] = dependency_outputs
                     runtime_context["tool_request_id"] = request.request_id
                     futures[pool.submit(
@@ -221,7 +225,8 @@ class ToolExecutionEngine:
         retry_count = int(request.max_retries if request.max_retries is not None else self.max_retries)
         total_attempts = retry_count + 1
         sandboxed = self._uses_sandbox(tool)
-        sandbox_type = str(getattr(tool, "sandbox_type", "python" if sandboxed else ""))
+        default_sandbox_type = "python" if sandboxed else ""
+        sandbox_type = str(getattr(tool, "sandbox_type", default_sandbox_type))
 
         log("tool.execution.start", {
             "tool": request.tool_name,
@@ -292,7 +297,7 @@ class ToolExecutionEngine:
         tool_name: str,
         context: Optional[Dict[str, Any]],
     ) -> Dict[str, Any]:
-        runtime_context = dict(context or {})
+        runtime_context = self._safe_dict_copy(context)
         requested_scopes = self._requested_scopes(tool_name, runtime_context)
         return self.credential_manager.inject_into_context(
             tool_name,
@@ -344,6 +349,7 @@ class ToolExecutionEngine:
         def _run() -> None:
             try:
                 payload = dict(arguments or {})
+                payload = self._safe_dict_copy(payload)
                 payload["_context"] = runtime_context
                 outcome["result"] = tool(**payload)
             except Exception as exc:
@@ -383,7 +389,10 @@ class ToolExecutionEngine:
             sandbox.timeout_seconds = max(1, int(timeout_seconds))
         build_script = getattr(tool, "build_sandbox_script", None)
         if callable(build_script):
-            code = build_script(arguments=dict(arguments or {}), context=dict(runtime_context))
+            code = build_script(
+                arguments=self._safe_dict_copy(arguments),
+                context=self._safe_dict_copy(runtime_context),
+            )
         else:
             code = arguments.get("code")
         if not isinstance(code, str) or not code.strip():

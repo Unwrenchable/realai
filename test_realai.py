@@ -598,7 +598,8 @@ def test_week7_tool_executor_sandbox_enforcement():
     assert safe["sandboxed"] is True
     assert "sandboxed tool executor" in safe["stdout"]
     assert blocked["sandboxed"] is True
-    assert "PermissionError" in blocked.get("stderr", "") or blocked.get("returncode", 0) != 0
+    assert blocked.get("returncode", 0) != 0
+    assert "PermissionError" in blocked.get("stderr", "")
     assert tool.inline_calls == 0
 
     audit_entry = next((entry for entry in registry.get_audit_log() if entry.tool_name == "sandboxed_tool"), None)

@@ -119,12 +119,13 @@ def _extract_tool_calls(response):
 
 
 def _extract_tool_requests(tool_calls, allowed_tools):
+    allowed_set = set(allowed_tools or [])
     requests = []
     for index, tool_call in enumerate(tool_calls, start=1):
         if not isinstance(tool_call, dict):
             raise ValueError("Invalid tool call payload.")
         name = tool_call.get("name")
-        if name not in set(allowed_tools or []):
+        if name not in allowed_set:
             raise PermissionError("Tool not allowed")
         args = tool_call.get("arguments", {})
         if not isinstance(args, dict):
